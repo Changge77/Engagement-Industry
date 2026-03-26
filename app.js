@@ -159,9 +159,6 @@ function normalizeIBXGeoJSONForLeaflet(geojson) {
   if (!geojson) return geojson;
 
   const inferred2263 = looksLikeEPSG2263(geojson);
-  // #region agent log
-  fetch('http://127.0.0.1:7270/ingest/17c6cb1f-14d0-448c-8643-0d36bdeca604',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'8ea9f4'},body:JSON.stringify({sessionId:'8ea9f4',runId:'initial',hypothesisId:'H2',location:'app.js:normalizeIBXGeoJSONForLeaflet',message:'normalization input inspection',data:{geojsonType:geojson?.type ?? null,crsName:geojson?.crs?.properties?.name ?? null,inferred2263},timestamp:Date.now()})}).catch(()=>{});
-  // #endregion
 
   if (!inferred2263) {
     // EPSG:4326 / CRS84 (GeoJSON [lng, lat] in degrees): Leaflet expects geographic coordinates.
@@ -453,9 +450,6 @@ function setStep(step) {
   if (step === "ibxRoutes") {
     if (!map.hasLayer(layers.ibxLine)) layers.ibxLine.addTo(map);
     if (!map.hasLayer(layers.ibxStations)) layers.ibxStations.addTo(map);
-    // #region agent log
-    fetch('http://127.0.0.1:7270/ingest/17c6cb1f-14d0-448c-8643-0d36bdeca604',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'8ea9f4'},body:JSON.stringify({sessionId:'8ea9f4',runId:'initial',hypothesisId:'H4',location:'app.js:setStep',message:'entered ibx step, layers toggled on',data:{ibxLineOnMap:map.hasLayer(layers.ibxLine),ibxStationsOnMap:map.hasLayer(layers.ibxStations),ibxLineChildren:layers.ibxLine.getLayers().length,ibxStationChildren:layers.ibxStations.getLayers().length},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
   } else {
     if (map.hasLayer(layers.ibxLine)) layers.ibxLine.removeFrom(map);
     if (map.hasLayer(layers.ibxStations)) layers.ibxStations.removeFrom(map);
@@ -655,13 +649,6 @@ function loadIBXGeoJSONToLayer(geojson) {
   const normalized = normalizeIBXGeoJSONForLeaflet(geojson);
   layers.ibxLine.clearLayers();
 
-  const featureCount =
-    normalized?.type === "FeatureCollection" && Array.isArray(normalized.features)
-      ? normalized.features.length
-      : normalized?.type === "Feature"
-        ? 1
-        : 0;
-
   const layer = L.geoJSON(normalized, {
     style: {
       color: "#ff0000",
@@ -679,21 +666,11 @@ function loadIBXGeoJSONToLayer(geojson) {
   });
   layer.addTo(layers.ibxLine);
   state.ibxLine.loaded = true;
-  // #region agent log
-  fetch('http://127.0.0.1:7270/ingest/17c6cb1f-14d0-448c-8643-0d36bdeca604',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'8ea9f4'},body:JSON.stringify({sessionId:'8ea9f4',runId:'initial',hypothesisId:'H2',location:'app.js:loadIBXGeoJSONToLayer',message:'ibx line layer built',data:{featureCount,renderedLayerCount:layer.getLayers().length},timestamp:Date.now()})}).catch(()=>{});
-  // #endregion
 }
 
 function loadIBXStationsGeoJSONToLayer(geojson) {
   const normalized = normalizeIBXGeoJSONForLeaflet(geojson);
   layers.ibxStations.clearLayers();
-
-  const features = normalized?.type === "FeatureCollection" && Array.isArray(normalized.features)
-    ? normalized.features
-    : [];
-  const emptyMultiPointCount = features.filter(
-    (f) => f?.geometry?.type === "MultiPoint" && Array.isArray(f.geometry.coordinates) && f.geometry.coordinates.length === 0
-  ).length;
 
   const layer = L.geoJSON(normalized, {
     pointToLayer: (feature, latlng) => {
@@ -707,30 +684,16 @@ function loadIBXStationsGeoJSONToLayer(geojson) {
     }
   });
   layer.addTo(layers.ibxStations);
-  // #region agent log
-  fetch('http://127.0.0.1:7270/ingest/17c6cb1f-14d0-448c-8643-0d36bdeca604',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'8ea9f4'},body:JSON.stringify({sessionId:'8ea9f4',runId:'initial',hypothesisId:'H3',location:'app.js:loadIBXStationsGeoJSONToLayer',message:'ibx station layer built',data:{featureCount:features.length,emptyMultiPointCount,renderedLayerCount:layer.getLayers().length},timestamp:Date.now()})}).catch(()=>{});
-  // #endregion
 }
 
 async function tryLoadGeoJSONFromFile(filename) {
   try {
     const res = await fetch(filename);
-    if (!res.ok) {
-      // #region agent log
-      fetch('http://127.0.0.1:7270/ingest/17c6cb1f-14d0-448c-8643-0d36bdeca604',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'8ea9f4'},body:JSON.stringify({sessionId:'8ea9f4',runId:'initial',hypothesisId:'H1',location:'app.js:tryLoadGeoJSONFromFile',message:'geojson fetch failed status',data:{filename,status:res.status},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
-      throw new Error(`HTTP ${res.status}`);
-    }
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const text = await res.text();
     const parsed = JSON.parse(text);
-    // #region agent log
-    fetch('http://127.0.0.1:7270/ingest/17c6cb1f-14d0-448c-8643-0d36bdeca604',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'8ea9f4'},body:JSON.stringify({sessionId:'8ea9f4',runId:'initial',hypothesisId:'H1',location:'app.js:tryLoadGeoJSONFromFile',message:'geojson fetch success',data:{filename,ok:true,textLength:text.length,geojsonType:parsed?.type ?? null,crsName:parsed?.crs?.properties?.name ?? null},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     return parsed;
   } catch {
-    // #region agent log
-    fetch('http://127.0.0.1:7270/ingest/17c6cb1f-14d0-448c-8643-0d36bdeca604',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'8ea9f4'},body:JSON.stringify({sessionId:'8ea9f4',runId:'initial',hypothesisId:'H1',location:'app.js:tryLoadGeoJSONFromFile',message:'geojson fetch or parse threw',data:{filename},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     return null;
   }
 }
