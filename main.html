@@ -37,7 +37,22 @@
           rows="3"
           aria-label="Sharing link"
         ></textarea>
-        <ul id="participantList" class="participantList"></ul>
+        <div class="participantPicker">
+          <label class="participantPicker__label" for="participantSearch">Find participant</label>
+          <input
+            id="participantSearch"
+            class="participantPicker__input"
+            type="search"
+            placeholder="Type to search (name, id)…"
+            autocomplete="off"
+          />
+
+          <label class="participantPicker__label" for="participantSelect">Select participant</label>
+          <select id="participantSelect" class="participantPicker__select">
+            <option value="" selected disabled>Select participant…</option>
+          </select>
+        </div>
+        <ul id="participantList" class="participantList is-hidden" aria-hidden="true"></ul>
       </div>
 
       <div id="app">

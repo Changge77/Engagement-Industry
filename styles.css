@@ -478,6 +478,53 @@ html:not(.participant-token-ok) body[data-survey-mode="participant"] #app {
   resize: vertical;
 }
 
+.participantPicker {
+  display: grid;
+  grid-template-columns: 180px 1fr;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.participantPicker__label {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.participantPicker__input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--panel2);
+  color: var(--text);
+  font: inherit;
+}
+
+.participantPicker__input:focus {
+  outline: none;
+  border-color: rgba(91, 188, 255, 0.7);
+  box-shadow: 0 0 0 3px rgba(91, 188, 255, 0.18);
+}
+
+.participantPicker__select {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--panel2);
+  color: var(--text);
+  font: inherit;
+}
+
+.participantPicker__select:focus {
+  outline: none;
+  border-color: rgba(91, 188, 255, 0.7);
+  box-shadow: 0 0 0 3px rgba(91, 188, 255, 0.18);
+}
+
 .participantList {
   margin: 0;
   padding: 0;

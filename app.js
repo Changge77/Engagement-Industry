@@ -507,8 +507,33 @@ function setStep(step) {
   };
   if (pill) pill.textContent = labelMap[step] ?? "Survey";
 
-  // IBX railway highlight should appear in Step 3.
+  // Conductor review UX: show only the relevant layer(s) for the selected step.
   if (!map) return;
+  if (layers?.locations) {
+    if (step === "locations") {
+      if (!map.hasLayer(layers.locations)) layers.locations.addTo(map);
+    } else if (map.hasLayer(layers.locations)) {
+      layers.locations.removeFrom(map);
+    }
+  }
+
+  if (layers?.currentRoutes) {
+    if (step === "currentRoutes") {
+      if (!map.hasLayer(layers.currentRoutes)) layers.currentRoutes.addTo(map);
+    } else if (map.hasLayer(layers.currentRoutes)) {
+      layers.currentRoutes.removeFrom(map);
+    }
+  }
+
+  if (layers?.ibxRoutes) {
+    if (step === "ibxRoutes") {
+      if (!map.hasLayer(layers.ibxRoutes)) layers.ibxRoutes.addTo(map);
+    } else if (map.hasLayer(layers.ibxRoutes)) {
+      layers.ibxRoutes.removeFrom(map);
+    }
+  }
+
+  // IBX railway context should appear in Step 3.
   if (step === "ibxRoutes") {
     if (!map.hasLayer(layers.ibxLine)) layers.ibxLine.addTo(map);
     if (!map.hasLayer(layers.ibxStations)) layers.ibxStations.addTo(map);
@@ -1205,6 +1230,34 @@ async function bootParticipant() {
 }
 
 let conductorInitialized = false;
+let conductorParticipantsCache = [];
+
+function matchesParticipantQuery(p, query) {
+  const q = String(query || "").trim().toLowerCase();
+  if (!q) return true;
+  const label = String(p?.label ?? "").toLowerCase();
+  const id = String(p?.id ?? "").toLowerCase();
+  return label.includes(q) || id.includes(q);
+}
+
+function populateParticipantSelect(select, list, currentId) {
+  select.innerHTML = "";
+  const placeholder = document.createElement("option");
+  placeholder.value = "";
+  placeholder.disabled = true;
+  placeholder.selected = !currentId;
+  placeholder.textContent = "Select participant…";
+  select.appendChild(placeholder);
+
+  for (const p of list) {
+    const opt = document.createElement("option");
+    opt.value = p.id;
+    const t = new Date(p.updatedAt);
+    opt.textContent = `${p.label} · ${t.toLocaleString()} · ${p.counts.locations} loc / ${p.counts.currentSegments + p.counts.ibxSegments} seg`;
+    if (p.id === currentId) opt.selected = true;
+    select.appendChild(opt);
+  }
+}
 
 /**
  * Verifies stored conductor secret against the server.
@@ -1260,23 +1313,48 @@ function alertConductorFailure(result) {
 }
 
 async function refreshParticipantList() {
-  const ul = document.getElementById("participantList");
-  if (!ul) return;
+  const select = document.getElementById("participantSelect");
+  const search = document.getElementById("participantSearch");
+  if (!select) return;
   const res = await fetch("/api/conductor/participants");
   if (!res.ok) return;
   const list = await res.json();
-  ul.innerHTML = "";
-  for (const p of list) {
-    const li = document.createElement("li");
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.className = "participantList__btn";
-    btn.dataset.participantId = p.id;
-    const t = new Date(p.updatedAt);
-    btn.textContent = `${p.label} · ${t.toLocaleString()} · ${p.counts.locations} loc / ${p.counts.currentSegments + p.counts.ibxSegments} seg`;
-    btn.addEventListener("click", () => void selectConductorParticipant(p.id));
-    li.appendChild(btn);
-    ul.appendChild(li);
+  conductorParticipantsCache = Array.isArray(list) ? list : [];
+
+  const current = viewingParticipantId || String(select.value || "");
+  const q = String(search?.value ?? "");
+  const filtered = conductorParticipantsCache.filter((p) => matchesParticipantQuery(p, q));
+  populateParticipantSelect(select, filtered, current);
+
+  if (!select.dataset.bound) {
+    select.dataset.bound = "1";
+    select.addEventListener("change", () => {
+      const id = String(select.value || "");
+      if (!id) return;
+      void selectConductorParticipant(id);
+    });
+  }
+
+  if (search && !search.dataset.bound) {
+    search.dataset.bound = "1";
+    search.addEventListener("input", () => {
+      const currentId = viewingParticipantId || String(select.value || "");
+      const query = String(search.value || "");
+      const f = conductorParticipantsCache.filter((p) => matchesParticipantQuery(p, query));
+      populateParticipantSelect(select, f, currentId);
+    });
+    search.addEventListener("keydown", (e) => {
+      if (e.key !== "Enter") return;
+      const first = select.querySelector('option[value]:not([value=""]):not([disabled])');
+      if (first) {
+        select.value = first.value;
+        void selectConductorParticipant(first.value);
+      }
+    });
+  }
+
+  if (!viewingParticipantId && conductorParticipantsCache.length > 0) {
+    void selectConductorParticipant(conductorParticipantsCache[0].id);
   }
 }
 
@@ -1293,9 +1371,8 @@ async function selectConductorParticipant(id) {
   rebuildFromState();
   uiUpdateStats();
   document.getElementById("conductorViewingLabel").textContent = data.label;
-  document.querySelectorAll(".participantList__btn").forEach((b) => {
-    b.classList.toggle("is-active", b.dataset.participantId === id);
-  });
+  const select = document.getElementById("participantSelect");
+  if (select && String(select.value || "") !== id) select.value = id;
   setStep("locations");
 }
 
@@ -1338,7 +1415,7 @@ async function initConductorSurveyUi() {
   const hint = document.getElementById("mapHint");
   if (hint) {
     hint.textContent =
-      "Select a participant in the list, then use tabs 1–3 to review their map (read-only).";
+      "Select a participant above, then use tabs 1–3 to review their map (read-only).";
   }
   setupConductorCreateLink();
   // Map was created after #app became visible; still refresh tile/layout after flex settles.
