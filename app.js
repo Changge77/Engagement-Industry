@@ -261,6 +261,7 @@ function modeKeyFromUI(routeModeKey) {
 }
 
 const ui = {
+  activeStep: "locations",
   locationType: "none",
   activeRouteModeCurrent: "huge",
   activeRouteModeIbx: "ibx",
@@ -280,7 +281,7 @@ const ui = {
 };
 
 const state = {
-  industry: { companyName: "" },
+  industry: { companyName: "", roleKey: "", roleOtherDetail: "" },
   locations: [],
   routes: {
     current: { segments: [], totalCostGold: 0 },
@@ -364,7 +365,9 @@ function applySurveyPayload(parsed, options = {}) {
   state.ibxLine = parsed.ibxLine ?? { loaded: state.ibxLine?.loaded ?? false };
 
   state.industry = {
-    companyName: String(parsed.industry?.companyName ?? "")
+    companyName: String(parsed.industry?.companyName ?? ""),
+    roleKey: String(parsed.industry?.roleKey ?? ""),
+    roleOtherDetail: String(parsed.industry?.roleOtherDetail ?? "")
   };
 
   if (didMigrate && persist) saveState();
@@ -508,20 +511,61 @@ function uiUpdateStats() {
 
   const indEl = document.getElementById("participantIndustrySummary");
   if (indEl) {
-    const c = String(state.industry?.companyName ?? "").trim();
-    indEl.textContent = c ? `Company / industry you entered: ${c}` : "";
-    indEl.classList.toggle("is-hidden", !c);
+    const company = String(state.industry?.companyName ?? "").trim();
+    const rk = String(state.industry?.roleKey ?? "").trim();
+    let roleText = "";
+    if (rk === "manager") roleText = "Manager";
+    else if (rk === "worker") roleText = "Worker";
+    else if (rk === "transporter") roleText = "Transporter";
+    else if (rk === "other") {
+      const d = String(state.industry?.roleOtherDetail ?? "").trim();
+      roleText = d ? `Others (${d})` : "Others";
+    }
+    let text = "";
+    if (company) text = `Company / industry you entered: ${company}`;
+    if (roleText) text = text ? `${text} · Role: ${roleText}` : `Role: ${roleText}`;
+    indEl.textContent = text;
+    indEl.classList.toggle("is-hidden", !text);
   }
 
   const condInd = document.getElementById("conductorIndustryLabel");
   if (condInd && SURVEY_MODE === "conductor") {
     const c = String(state.industry?.companyName ?? "").trim();
-    condInd.textContent = c ? `Industry / company: ${c}` : "";
+    const rk = String(state.industry?.roleKey ?? "").trim();
+    let roleSuffix = "";
+    if (rk === "manager") roleSuffix = " · Manager";
+    else if (rk === "worker") roleSuffix = " · Worker";
+    else if (rk === "transporter") roleSuffix = " · Transporter";
+    else if (rk === "other") {
+      const d = String(state.industry?.roleOtherDetail ?? "").trim();
+      roleSuffix = d ? ` · Others (${d})` : " · Others";
+    }
+    condInd.textContent = c ? `Industry / company: ${c}${roleSuffix}` : "";
     condInd.classList.toggle("is-hidden", !c || !viewingParticipantId);
   }
+
+  updateParticipantCompanyBanner();
+}
+
+function updateParticipantCompanyBanner() {
+  const el = document.getElementById("participantCompanyBanner");
+  if (!el) return;
+  const hasWorkplace = state.locations.some((l) => l.locationType === "workplace");
+  const mapGatesOpen = Boolean(
+    document.getElementById("industryGate")?.classList.contains("is-open") ||
+      document.getElementById("roleGate")?.classList.contains("is-open")
+  );
+  const show =
+    SURVEY_MODE === "participant" &&
+    !readOnly &&
+    ui.activeStep === "locations" &&
+    !hasWorkplace &&
+    !mapGatesOpen;
+  el.classList.toggle("is-hidden", !show);
 }
 
 function setStep(step) {
+  ui.activeStep = step;
   document.querySelectorAll(".tab").forEach((el) => {
     el.classList.toggle("is-active", el.dataset.step === step);
   });
@@ -538,6 +582,8 @@ function setStep(step) {
     export: "Step 4: Export"
   };
   if (pill) pill.textContent = labelMap[step] ?? "Survey";
+
+  updateParticipantCompanyBanner();
 
   // Conductor review UX: show only the relevant layer(s) for the selected step.
   if (!map) return;
@@ -760,11 +806,19 @@ function addLocation(type, latlng) {
   rebuildFromState();
   saveState();
   uiUpdateStats();
+  if (SURVEY_MODE === "participant" && type === "workplace") {
+    maybeOpenParticipantRoleGate();
+  }
 }
 
 function clearLocations() {
   if (readOnly) return;
   state.locations = [];
+  state.industry = {
+    ...state.industry,
+    roleKey: "",
+    roleOtherDetail: ""
+  };
   layers.locations.clearLayers();
   saveState();
   uiUpdateStats();
@@ -888,6 +942,8 @@ function exportAllDataCSVFromState(stateObj, participantMeta = null) {
   const plab = participantMeta?.label ?? "";
   const withP = pid != null && pid !== "";
   const industryCo = String(stateObj.industry?.companyName ?? "");
+  const industryRole = String(stateObj.industry?.roleKey ?? "");
+  const industryRoleDetail = String(stateObj.industry?.roleOtherDetail ?? "");
   const baseHeader = [
     "record_type",
     "section",
@@ -906,10 +962,12 @@ function exportAllDataCSVFromState(stateObj, participantMeta = null) {
     "section_total_cost_gold_after"
   ];
   rows.push(
-    withP ? ["participant_id", "participant_label", "industry_company", ...baseHeader] : baseHeader
+    withP
+      ? ["participant_id", "participant_label", "industry_company", "industry_role", "industry_role_detail", ...baseHeader]
+      : baseHeader
   );
 
-  const rowPrefix = withP ? [pid, plab, industryCo] : [];
+  const rowPrefix = withP ? [pid, plab, industryCo, industryRole, industryRoleDetail] : [];
 
   for (const loc of stateObj.locations) {
     const has2263 = typeof loc.x === "number" && typeof loc.y === "number";
@@ -1042,7 +1100,7 @@ async function exportAllParticipantsCSV() {
   }
   const list = await res.json();
   const headerRow =
-    "participant_id,participant_label,industry_company,record_type,section,location_type,id,x_2263,y_2263,lat,lng,route_mode,route_mode_key,length_miles,transfer_applied_gold,transfer_cost_gold,segment_cost_gold,section_total_cost_gold_after";
+    "participant_id,participant_label,industry_company,industry_role,industry_role_detail,record_type,section,location_type,id,x_2263,y_2263,lat,lng,route_mode,route_mode_key,length_miles,transfer_applied_gold,transfer_cost_gold,segment_cost_gold,section_total_cost_gold_after";
   const chunks = [headerRow];
   for (const p of list) {
     const r = await fetch(`/api/conductor/participants/${encodeURIComponent(p.id)}`);
@@ -1162,6 +1220,7 @@ function setupUI() {
 }
 
 function setupMap() {
+  if (map) return;
   map = L.map("map", { zoomControl: true }).setView([40.7128, -74.006], 11);
 
   L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
@@ -1221,6 +1280,126 @@ function setParticipantMapHintAfterIndustryGate() {
   }
 }
 
+function syncParticipantMapGateOverlay() {
+  if (SURVEY_MODE !== "participant") return;
+  const mapWrap = document.querySelector("#app .mapWrap");
+  if (!mapWrap) return;
+  const ind = document.getElementById("industryGate");
+  const role = document.getElementById("roleGate");
+  const anyOpen = Boolean(
+    ind?.classList.contains("is-open") || role?.classList.contains("is-open")
+  );
+  mapWrap.classList.toggle("map-gate-open", anyOpen);
+  if (anyOpen) document.body.dataset.mapGateOpen = "1";
+  else delete document.body.dataset.mapGateOpen;
+  updateParticipantCompanyBanner();
+}
+
+function participantHasWorkplaceLocation() {
+  return state.locations.some((l) => l.locationType === "workplace");
+}
+
+const PARTICIPANT_ROLE_KEYS = new Set(["manager", "worker", "transporter", "other"]);
+
+function participantIndustryRoleIsComplete() {
+  const k = String(state.industry?.roleKey ?? "").trim();
+  if (!k || !PARTICIPANT_ROLE_KEYS.has(k)) return false;
+  if (k === "other") return String(state.industry?.roleOtherDetail ?? "").trim().length > 0;
+  return true;
+}
+
+function participantNeedsRoleGate() {
+  return (
+    SURVEY_MODE === "participant" &&
+    participantHasWorkplaceLocation() &&
+    !participantIndustryRoleIsComplete()
+  );
+}
+
+function openParticipantRoleGate() {
+  const gate = document.getElementById("roleGate");
+  if (!gate) return;
+  gate.classList.add("is-open");
+  syncParticipantMapGateOverlay();
+
+  const otherWrap = document.getElementById("roleOtherWrap");
+  const otherInput = document.getElementById("roleOtherInput");
+  const k = String(state.industry?.roleKey ?? "").trim();
+
+  document.querySelectorAll('input[name="participantRole"]').forEach((r) => {
+    r.checked = k !== "" && r.value === k;
+  });
+
+  if (k === "other") {
+    otherWrap?.classList.remove("is-hidden");
+    if (otherInput) otherInput.value = String(state.industry?.roleOtherDetail ?? "");
+  } else {
+    otherWrap?.classList.add("is-hidden");
+    if (otherInput) otherInput.value = "";
+  }
+
+  requestAnimationFrame(() => {
+    document.querySelector('input[name="participantRole"]')?.focus();
+  });
+}
+
+function initParticipantRoleGateOnce() {
+  if (SURVEY_MODE !== "participant" || document.body.dataset.participantRoleGateBound === "1") return;
+  const gate = document.getElementById("roleGate");
+  if (!gate) return;
+  document.body.dataset.participantRoleGateBound = "1";
+
+  const btn = document.getElementById("roleContinueBtn");
+  const otherWrap = document.getElementById("roleOtherWrap");
+  const otherInput = document.getElementById("roleOtherInput");
+
+  document.querySelectorAll('input[name="participantRole"]').forEach((radio) => {
+    radio.addEventListener("change", () => {
+      const show = radio.value === "other" && radio.checked;
+      otherWrap?.classList.toggle("is-hidden", !show);
+      if (show) otherInput?.focus();
+    });
+  });
+
+  otherInput?.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") btn?.click();
+  });
+
+  btn?.addEventListener("click", () => {
+    const sel = document.querySelector('input[name="participantRole"]:checked');
+    if (!sel) {
+      window.alert("Please select your role.");
+      return;
+    }
+    let detail = "";
+    if (sel.value === "other") {
+      detail = String(otherInput?.value ?? "").trim();
+      if (!detail) {
+        window.alert("Please describe your role.");
+        return;
+      }
+    }
+    state.industry = {
+      ...state.industry,
+      roleKey: sel.value,
+      roleOtherDetail: sel.value === "other" ? detail : ""
+    };
+    gate.classList.remove("is-open");
+    syncParticipantMapGateOverlay();
+    void flushSaveToServer();
+    rebuildFromState();
+    uiUpdateStats();
+    if (map) {
+      requestAnimationFrame(() => map.invalidateSize());
+      setTimeout(() => map.invalidateSize(), 200);
+    }
+  });
+}
+
+function maybeOpenParticipantRoleGate() {
+  if (participantNeedsRoleGate()) openParticipantRoleGate();
+}
+
 async function finishParticipantBoot() {
   setupUI();
   setupMap();
@@ -1234,6 +1413,7 @@ async function finishParticipantBoot() {
   setStep("locations");
   uiUpdateStats();
   setParticipantMapHintAfterIndustryGate();
+  initParticipantRoleGateOnce();
 
   if (!document.body.dataset.participantPagehideBound) {
     document.body.dataset.participantPagehideBound = "1";
@@ -1301,6 +1481,8 @@ async function bootParticipant() {
     return;
   }
 
+  await finishParticipantBoot();
+
   const hasIndustryField = Object.prototype.hasOwnProperty.call(loadedPayload, "industry");
   const hasSurveyProgress =
     (state.locations?.length ?? 0) > 0 ||
@@ -1320,10 +1502,16 @@ async function bootParticipant() {
         window.alert("Please enter the industry or company you work in.");
         return;
       }
-      state.industry = { companyName: name };
+      state.industry = { ...state.industry, companyName: name };
       gate?.classList.remove("is-open");
+      syncParticipantMapGateOverlay();
       void flushSaveToServer();
-      void finishParticipantBoot();
+      rebuildFromState();
+      uiUpdateStats();
+      if (map) {
+        requestAnimationFrame(() => map.invalidateSize());
+        setTimeout(() => map.invalidateSize(), 200);
+      }
     };
     if (btn) btn.onclick = submit;
     if (input) {
@@ -1333,11 +1521,14 @@ async function bootParticipant() {
       input.value = "";
     }
     gate?.classList.add("is-open");
+    syncParticipantMapGateOverlay();
     if (input) requestAnimationFrame(() => input.focus());
     return;
   }
 
-  await finishParticipantBoot();
+  if (participantNeedsRoleGate()) {
+    openParticipantRoleGate();
+  }
 }
 
 let conductorInitialized = false;
@@ -1410,7 +1601,7 @@ async function deleteConductorParticipant(p) {
   if (viewingParticipantId === p.id) {
     viewingParticipantId = null;
     viewingParticipantLabel = "";
-    state.industry = { companyName: "" };
+    state.industry = { companyName: "", roleKey: "", roleOtherDetail: "" };
     state.locations = [];
     state.routes = {
       current: { segments: [], totalCostGold: 0 },

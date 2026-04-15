@@ -48,34 +48,6 @@
       </div>
     </div>
 
-    <div
-      id="industryGate"
-      class="participantGate industryGate"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="industryGateTitle"
-    >
-      <div class="participantGate__card industryGate__card">
-        <h1 class="participantGate__h1" id="industryGateTitle">What industry company do you work in?</h1>
-        <p class="participantGate__p">
-          Type the name of your employer or the industry you work in. Next, you will mark that company’s location on
-          the map.
-        </p>
-        <label class="industryGate__label" for="industryCompanyInput">Your answer</label>
-        <input
-          id="industryCompanyInput"
-          class="industryGate__input"
-          type="text"
-          maxlength="500"
-          autocomplete="organization"
-          placeholder="e.g. ABC Logistics, food manufacturing, etc."
-        />
-        <div class="participantGate__actions">
-          <button class="primaryBtn" id="industryContinueBtn" type="button">Continue to map</button>
-        </div>
-      </div>
-    </div>
-
     <div id="app">
       <header class="topbar">
         <div class="topbar__title">NYC Supply Chain Survey</div>
@@ -359,6 +331,89 @@
         </aside>
 
         <section class="mapWrap">
+          <div
+            id="participantCompanyBanner"
+            class="mapCompanyHint is-hidden"
+            role="status"
+            aria-live="polite"
+          >
+            Please Mark Your Company Location
+          </div>
+
+          <div
+            id="industryGate"
+            class="industryGate industryGate--floating"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="industryGateTitle"
+          >
+            <div class="participantGate__card industryGate__card">
+              <h2 class="industryGate__title" id="industryGateTitle">What industry company do you work in?</h2>
+              <p class="participantGate__p industryGate__intro">
+                Please type the name of industry company you work in.<br />
+                Next, please mark the company’s location on the map.
+              </p>
+              <label class="industryGate__label" for="industryCompanyInput">Your answer</label>
+              <input
+                id="industryCompanyInput"
+                class="industryGate__input"
+                type="text"
+                maxlength="500"
+                autocomplete="organization"
+                placeholder="e.g. ABC Logistics, food manufacturing, etc."
+              />
+              <div class="participantGate__actions">
+                <button class="primaryBtn" id="industryContinueBtn" type="button">Continue to map</button>
+              </div>
+            </div>
+          </div>
+
+          <div
+            id="roleGate"
+            class="roleGate roleGate--floating"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="roleGateTitle"
+          >
+            <div class="participantGate__card roleGate__card">
+              <h2 class="roleGate__title" id="roleGateTitle">What is your role/job in the industry company?</h2>
+              <p class="participantGate__p roleGate__intro">Choose the option that best describes your role.</p>
+              <fieldset class="roleGate__fieldset">
+                <legend class="roleGate__legend">Your role</legend>
+                <label class="roleGate__option">
+                  <input type="radio" name="participantRole" value="manager" />
+                  Manager
+                </label>
+                <label class="roleGate__option">
+                  <input type="radio" name="participantRole" value="worker" />
+                  Worker
+                </label>
+                <label class="roleGate__option">
+                  <input type="radio" name="participantRole" value="transporter" />
+                  Transporter
+                </label>
+                <label class="roleGate__option">
+                  <input type="radio" name="participantRole" value="other" />
+                  Others
+                </label>
+              </fieldset>
+              <div id="roleOtherWrap" class="roleOtherWrap is-hidden">
+                <label class="roleGate__label" for="roleOtherInput">Please specify</label>
+                <input
+                  id="roleOtherInput"
+                  class="roleGate__input"
+                  type="text"
+                  maxlength="200"
+                  autocomplete="off"
+                  placeholder="Describe your role"
+                />
+              </div>
+              <div class="participantGate__actions">
+                <button class="primaryBtn" id="roleContinueBtn" type="button">Continue</button>
+              </div>
+            </div>
+          </div>
+
           <div id="map"></div>
           <div class="mapHint" id="mapHint">
             Select a tool on the left, then click the map to add points or draw
