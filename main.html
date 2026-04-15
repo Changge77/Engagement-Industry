@@ -9,28 +9,10 @@
       href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
     />
     <link rel="stylesheet" href="./styles.css" />
+    <link rel="icon" href="data:," />
   </head>
   <body data-survey-mode="conductor">
-    <div id="conductorLogin" class="conductorLogin">
-      <div class="conductorLogin__card">
-        <h1 class="conductorLogin__h1">Conductor access</h1>
-        <p class="conductorLogin__p">
-          Enter the same secret as <code>CONDUCTOR_SECRET</code> in the server <code>.env</code> file.
-        </p>
-        <label class="conductorLogin__label" for="conductorSecretInput">Secret</label>
-        <input
-          id="conductorSecretInput"
-          class="conductorLogin__input"
-          type="password"
-          autocomplete="current-password"
-        />
-        <button class="primaryBtn conductorLogin__btn" id="conductorUnlockBtn" type="button">
-          Unlock dashboard
-        </button>
-      </div>
-    </div>
-
-    <div id="conductorWorkspace" class="conductorWorkspace is-hidden">
+    <div id="conductorWorkspace" class="conductorWorkspace">
       <div class="conductorToolbar">
         <div class="conductorToolbar__row">
           <h2 class="conductorToolbar__h2">Participants</h2>

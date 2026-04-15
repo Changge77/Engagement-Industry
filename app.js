@@ -477,13 +477,16 @@ function rebuildFromState() {
 }
 
 function uiUpdateStats() {
-  document.getElementById("locationsCount").textContent = String(state.locations.length);
-  document.getElementById("currentTotalGold").textContent = formatGold(state.routes.current.totalCostGold);
-  document.getElementById("ibxTotalGold").textContent = formatGold(state.routes.ibx.totalCostGold);
-
-  document.getElementById("exportLocationsCount").textContent = String(state.locations.length);
-  document.getElementById("exportCurrentSegments").textContent = String(state.routes.current.segments.length);
-  document.getElementById("exportIbXSegments").textContent = String(state.routes.ibx.segments.length);
+  const set = (id, text) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = text;
+  };
+  set("locationsCount", String(state.locations.length));
+  set("currentTotalGold", formatGold(state.routes.current.totalCostGold));
+  set("ibxTotalGold", formatGold(state.routes.ibx.totalCostGold));
+  set("exportLocationsCount", String(state.locations.length));
+  set("exportCurrentSegments", String(state.routes.current.segments.length));
+  set("exportIbXSegments", String(state.routes.ibx.segments.length));
 }
 
 function setStep(step) {
@@ -502,9 +505,10 @@ function setStep(step) {
     ibxRoutes: "Step 3: IBX Assumption",
     export: "Step 4: Export"
   };
-  pill.textContent = labelMap[step] ?? "Survey";
+  if (pill) pill.textContent = labelMap[step] ?? "Survey";
 
   // IBX railway highlight should appear in Step 3.
+  if (!map) return;
   if (step === "ibxRoutes") {
     if (!map.hasLayer(layers.ibxLine)) layers.ibxLine.addTo(map);
     if (!map.hasLayer(layers.ibxStations)) layers.ibxStations.addTo(map);
@@ -970,10 +974,8 @@ function exportRoutesGeoJSON() {
 }
 
 async function exportAllParticipantsCSV() {
-  const secret = sessionStorage.getItem("conductorSecret");
-  if (!secret) return;
   const res = await fetch("/api/conductor/participants", {
-    headers: { Authorization: `Bearer ${secret}` }
+    headers: {}
   });
   if (!res.ok) {
     window.alert("Could not load participants.");
@@ -984,9 +986,7 @@ async function exportAllParticipantsCSV() {
     "participant_id,participant_label,record_type,section,location_type,id,x_2263,y_2263,lat,lng,route_mode,route_mode_key,length_miles,transfer_applied_gold,transfer_cost_gold,segment_cost_gold,section_total_cost_gold_after";
   const chunks = [headerRow];
   for (const p of list) {
-    const r = await fetch(`/api/conductor/participants/${encodeURIComponent(p.id)}`, {
-      headers: { Authorization: `Bearer ${secret}` }
-    });
+    const r = await fetch(`/api/conductor/participants/${encodeURIComponent(p.id)}`);
     if (!r.ok) continue;
     const data = await r.json();
     const body = exportAllDataCSVFromState(data.state, { id: data.id, label: data.label });
@@ -998,10 +998,8 @@ async function exportAllParticipantsCSV() {
 }
 
 async function exportAllParticipantsGeoJSON() {
-  const secret = sessionStorage.getItem("conductorSecret");
-  if (!secret) return;
   const res = await fetch("/api/conductor/participants", {
-    headers: { Authorization: `Bearer ${secret}` }
+    headers: {}
   });
   if (!res.ok) {
     window.alert("Could not load participants.");
@@ -1010,9 +1008,7 @@ async function exportAllParticipantsGeoJSON() {
   const list = await res.json();
   const allFeatures = [];
   for (const p of list) {
-    const r = await fetch(`/api/conductor/participants/${encodeURIComponent(p.id)}`, {
-      headers: { Authorization: `Bearer ${secret}` }
-    });
+    const r = await fetch(`/api/conductor/participants/${encodeURIComponent(p.id)}`);
     if (!r.ok) continue;
     const data = await r.json();
     const fc = getRoutesGeoJSON2263FromState(data.state, {
@@ -1210,26 +1206,63 @@ async function bootParticipant() {
 
 let conductorInitialized = false;
 
-async function tryConductorUnlock() {
-  const s = sessionStorage.getItem("conductorSecret");
-  if (!s) return false;
-  const res = await fetch("/api/conductor/participants", {
-    headers: { Authorization: `Bearer ${s}` }
-  });
-  if (!res.ok) {
+/**
+ * Verifies stored conductor secret against the server.
+ * @returns {{ ok: true } | { ok: false, code: string, message?: string }}
+ */
+async function verifyConductorSession() {
+  const raw = sessionStorage.getItem("conductorSecret");
+  const s = raw ? String(raw).trim().replace(/[\r\n]/g, "") : "";
+  if (!s) return { ok: false, code: "empty" };
+  try {
+    const res = await fetch("/api/conductor/participants", {
+      headers: { Authorization: `Bearer ${s}` }
+    });
+    if (res.status === 503) {
+      sessionStorage.removeItem("conductorSecret");
+      return { ok: false, code: "no_server_secret" };
+    }
+    if (!res.ok) {
+      sessionStorage.removeItem("conductorSecret");
+      return { ok: false, code: "unauthorized" };
+    }
+    return { ok: true };
+  } catch (e) {
     sessionStorage.removeItem("conductorSecret");
-    return false;
+    return { ok: false, code: "network", message: e?.message || String(e) };
   }
-  return true;
+}
+
+function setConductorLoginStatus(message, kind) {
+  const el = document.getElementById("conductorLoginStatus");
+  if (!el) return;
+  el.textContent = message || "";
+  el.classList.toggle("conductorLogin__status--ok", kind === "ok");
+}
+
+function alertConductorFailure(result) {
+  if (result.ok) return;
+  const inline = {
+    empty: "Enter the secret above, then try again.",
+    unauthorized:
+      "Does not match the server. Your .env line must be exactly CONDUCTOR_SECRET= and the same characters (capitalization matters). If the server was restarted after editing .env, type that value here.",
+    no_server_secret: "Server has no CONDUCTOR_SECRET. Add it to .env and restart npm start.",
+    network: `Cannot reach the server: ${result.message || "network error"}. Is npm start running?`
+  };
+  setConductorLoginStatus(inline[result.code] ?? `Unlock failed (${result.code}).`, null);
+  if (result.code === "network" || result.code === "no_server_secret") {
+    window.alert(
+      result.code === "no_server_secret"
+        ? "The server has no CONDUCTOR_SECRET. Set CONDUCTOR_SECRET in .env and restart npm start."
+        : `Could not reach the survey server.\n\n${result.message || ""}`
+    );
+  }
 }
 
 async function refreshParticipantList() {
   const ul = document.getElementById("participantList");
-  const secret = sessionStorage.getItem("conductorSecret");
-  if (!ul || !secret) return;
-  const res = await fetch("/api/conductor/participants", {
-    headers: { Authorization: `Bearer ${secret}` }
-  });
+  if (!ul) return;
+  const res = await fetch("/api/conductor/participants");
   if (!res.ok) return;
   const list = await res.json();
   ul.innerHTML = "";
@@ -1248,11 +1281,7 @@ async function refreshParticipantList() {
 }
 
 async function selectConductorParticipant(id) {
-  const secret = sessionStorage.getItem("conductorSecret");
-  if (!secret) return;
-  const res = await fetch(`/api/conductor/participants/${encodeURIComponent(id)}`, {
-    headers: { Authorization: `Bearer ${secret}` }
-  });
+  const res = await fetch(`/api/conductor/participants/${encodeURIComponent(id)}`);
   if (!res.ok) {
     window.alert("Could not load that participant.");
     return;
@@ -1272,20 +1301,17 @@ async function selectConductorParticipant(id) {
 
 function setupConductorCreateLink() {
   document.getElementById("createParticipantBtn")?.addEventListener("click", async () => {
-    const secret = sessionStorage.getItem("conductorSecret");
     const labelIn = document.getElementById("newParticipantLabel");
     const label = String(labelIn?.value ?? "").trim() || "Participant";
-    if (!secret) return;
     const res = await fetch("/api/participants", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${secret}`,
         "Content-Type": "application/json"
       },
       body: JSON.stringify({ label })
     });
     if (!res.ok) {
-      window.alert("Could not create link. Check CONDUCTOR_SECRET on the server.");
+      window.alert("Could not create link.");
       return;
     }
     const data = await res.json();
@@ -1309,41 +1335,48 @@ async function initConductorSurveyUi() {
   await loadIBXAssets();
   setStep("locations");
   uiUpdateStats();
-  document.getElementById("mapHint").textContent =
-    "Select a participant in the list, then use tabs 1–3 to review their map (read-only).";
+  const hint = document.getElementById("mapHint");
+  if (hint) {
+    hint.textContent =
+      "Select a participant in the list, then use tabs 1–3 to review their map (read-only).";
+  }
   setupConductorCreateLink();
+  // Map was created after #app became visible; still refresh tile/layout after flex settles.
+  if (map) {
+    requestAnimationFrame(() => {
+      map.invalidateSize();
+    });
+    setTimeout(() => map.invalidateSize(), 200);
+  }
+}
+
+async function showConductorDashboard(loginEl, workspace) {
+  loginEl?.classList.add("is-hidden");
+  if (loginEl) loginEl.hidden = true;
+  workspace?.classList.remove("is-hidden");
+  if (workspace) workspace.hidden = false;
+  setConductorLoginStatus("", null);
+  try {
+    await initConductorSurveyUi();
+    await refreshParticipantList();
+  } catch (e) {
+    console.error(e);
+    conductorInitialized = false;
+    loginEl?.classList.remove("is-hidden");
+    if (loginEl) loginEl.hidden = false;
+    workspace?.classList.add("is-hidden");
+    if (workspace) workspace.hidden = true;
+    window.alert(
+      `The dashboard failed to load: ${e?.message || e}\n\nOpen the browser console (F12) for details. If you see errors from "content.js" or extensions, try Incognito mode or disable extensions.`
+    );
+  }
 }
 
 async function bootConductor() {
   readOnly = true;
   ensureProjDefs();
-
-  const loginEl = document.getElementById("conductorLogin");
-  const workspace = document.getElementById("conductorWorkspace");
-
-  if (await tryConductorUnlock()) {
-    loginEl?.classList.add("is-hidden");
-    workspace?.classList.remove("is-hidden");
-    await initConductorSurveyUi();
-    await refreshParticipantList();
-  } else {
-    loginEl?.classList.remove("is-hidden");
-    workspace?.classList.add("is-hidden");
-    document.getElementById("conductorUnlockBtn")?.addEventListener("click", async () => {
-      const inp = document.getElementById("conductorSecretInput");
-      const val = String(inp?.value ?? "").trim();
-      if (!val) return;
-      sessionStorage.setItem("conductorSecret", val);
-      if (await tryConductorUnlock()) {
-        loginEl?.classList.add("is-hidden");
-        workspace?.classList.remove("is-hidden");
-        await initConductorSurveyUi();
-        await refreshParticipantList();
-      } else {
-        window.alert("Invalid conductor secret.");
-      }
-    });
-  }
+  await initConductorSurveyUi();
+  await refreshParticipantList();
 }
 
 async function bootStandalone() {

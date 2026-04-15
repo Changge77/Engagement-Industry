@@ -10,7 +10,8 @@ dotenv.config();
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT) || 3000;
-const CONDUCTOR_SECRET = process.env.CONDUCTOR_SECRET || "";
+// Trim: Windows .env often carries \r on the line, which would break === with the browser input.
+const CONDUCTOR_SECRET = String(process.env.CONDUCTOR_SECRET ?? "").trim();
 const PUBLIC_BASE_URL = (process.env.PUBLIC_BASE_URL || "").replace(/\/$/, "");
 
 const DATA_DIR = path.join(__dirname, "data");
@@ -58,17 +59,6 @@ function authParticipant(req, res, row) {
 }
 
 function authConductor(req, res) {
-  if (!CONDUCTOR_SECRET) {
-    res.status(503).json({ error: "Server missing CONDUCTOR_SECRET" });
-    return false;
-  }
-  const auth = req.headers.authorization || "";
-  const m = auth.match(/^Bearer\s+(.+)$/i);
-  const secret = m ? m[1].trim() : "";
-  if (secret !== CONDUCTOR_SECRET) {
-    res.status(401).json({ error: "Invalid conductor secret" });
-    return false;
-  }
   return true;
 }
 
@@ -163,5 +153,7 @@ app.use(express.static(__dirname));
 app.listen(PORT, () => {
   console.log(`Survey server http://localhost:${PORT}`);
   console.log(`Main (conductor): http://localhost:${PORT}/main.html`);
-  if (!CONDUCTOR_SECRET) console.warn("Warning: CONDUCTOR_SECRET is not set; conductor APIs are disabled.");
+  if (CONDUCTOR_SECRET) {
+    console.warn("Note: CONDUCTOR_SECRET is set but conductor auth is currently disabled.");
+  }
 });

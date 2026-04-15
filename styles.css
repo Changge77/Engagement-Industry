@@ -99,8 +99,9 @@ body {
   padding-right: 4px;
 }
 
+/* Must win over later rules like .conductorLogin { display: flex } */
 .is-hidden {
-  display: none;
+  display: none !important;
 }
 
 .panel__h2 {
@@ -299,7 +300,8 @@ html.participant-token-ok #participantGate {
   display: none;
 }
 
-html:not(.participant-token-ok) #app {
+/* Participant index only: hide main #app until ?participant=&token= are present */
+html:not(.participant-token-ok) body[data-survey-mode="participant"] #app {
   display: none;
 }
 
@@ -391,6 +393,18 @@ html:not(.participant-token-ok) #app {
 
 .conductorLogin__btn {
   width: 100%;
+}
+
+.conductorLogin__status {
+  margin: 12px 0 0;
+  min-height: 1.35em;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--danger);
+}
+
+.conductorLogin__status.conductorLogin__status--ok {
+  color: var(--accent2);
 }
 
 .conductorWorkspace {
