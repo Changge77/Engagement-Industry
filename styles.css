@@ -130,6 +130,9 @@ body {
 }
 
 .modeBtn {
+  display: flex;
+  align-items: center;
+  gap: 7px;
   padding: 9px 10px;
   border-radius: 10px;
   border: 1px solid var(--border);
@@ -137,6 +140,12 @@ body {
   color: var(--text);
   cursor: pointer;
   font-size: 13px;
+}
+
+.modeBtn__icon {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
 }
 
 .modeBtn.is-muted {
@@ -364,6 +373,16 @@ body {
   border-radius: 50%;
   border: 2px solid rgba(255, 255, 255, 0.95);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.locationPendingConfirm__dot--icon {
+  width: 28px;
+  height: 28px;
+  background: #fff;
+  border-color: #ccc;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .mapWrap.map-gate-open::before {

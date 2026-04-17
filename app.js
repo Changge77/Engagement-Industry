@@ -47,6 +47,21 @@ const LOCATION_TYPES = {
   other: { label: "Other", color: "#c3a6ff" }
 };
 
+const LOCATION_TYPE_ICONS = {
+  import: "Icons/Locations/Port.svg",
+  export: "Icons/Locations/Airport.svg",
+  manufacturing: "Icons/Locations/Manufactoring.svg",
+  warehouse: "Icons/Locations/Storage.svg",
+  subdistribution: "Icons/Locations/Distribution.svg"
+};
+
+const ORIGIN_TYPE_ICONS = {
+  storage_facility: "Icons/Locations/Storage.svg",
+  distribution_center: "Icons/Locations/Distribution.svg",
+  manufacturing_facility: "Icons/Locations/Manufactoring.svg",
+  airport: "Icons/Locations/Airport.svg"
+};
+
 /** Participant industry questionnaire: multi-select goods / products (keys match checkbox values in sub.html). */
 const GOODS_CATEGORY_OPTIONS = [
   { key: "recyclables", label: "Recyclables" },
@@ -567,8 +582,16 @@ function resetDraftDrawing() {
 let map;
 let layers;
 
-function markerIcon(color) {
-  // Colored circle via DivIcon.
+function markerIconFromSvg(svgSrc) {
+  return L.divIcon({
+    className: "",
+    html: `<div style="width:32px;height:32px;border-radius:50%;background:#fff;border:2px solid #ccc;display:flex;align-items:center;justify-content:center;box-shadow:0 1px 4px rgba(0,0,0,0.25)"><img src="${svgSrc}" style="width:27px;height:27px" alt=""></div>`,
+    iconSize: [32, 32],
+    iconAnchor: [16, 16]
+  });
+}
+
+function markerIconColored(color) {
   return L.divIcon({
     className: "",
     html: `<div style="width:14px;height:14px;border-radius:50%;background:${color};border:2px solid rgba(255,255,255,0.9)"></div>`,
@@ -577,13 +600,21 @@ function markerIcon(color) {
   });
 }
 
-function buildPendingLocationConfirmIconHtml(dotColor) {
+function markerIcon(locationType, fallbackColor) {
+  const svgSrc = LOCATION_TYPE_ICONS[locationType];
+  return svgSrc ? markerIconFromSvg(svgSrc) : markerIconColored(fallbackColor);
+}
+
+function buildPendingLocationConfirmIconHtml(dotColor, svgSrc) {
+  const dot = svgSrc
+    ? `<div class="locationPendingConfirm__dot locationPendingConfirm__dot--icon"><img src="${svgSrc}" style="width:24px;height:24px" alt=""></div>`
+    : `<div class="locationPendingConfirm__dot" style="background:${dotColor}"></div>`;
   return `<div class="locationPendingConfirm">
   <div class="locationPendingConfirm__row">
     <button type="button" class="locationPendingConfirm__btn" data-pending-loc="confirm" aria-label="Confirm location">√</button>
     <button type="button" class="locationPendingConfirm__btn locationPendingConfirm__btn--cancel" data-pending-loc="cancel" aria-label="Choose again">×</button>
   </div>
-  <div class="locationPendingConfirm__dot" style="background:${dotColor}"></div>
+  ${dot}
 </div>`;
 }
 
@@ -606,9 +637,12 @@ function renderPendingLocationMarker() {
   if (!ui.pendingLocation) return;
   const { latlng } = ui.pendingLocation;
   const dotColor = pendingLocationDotColor(ui.pendingLocation);
+  const pendingSvg = ui.pendingLocation.kind === "rawMaterialOrigin"
+    ? ORIGIN_TYPE_ICONS[ui.pendingLocation.originCategoryKey]
+    : LOCATION_TYPE_ICONS[ui.pendingLocation.type];
   const icon = L.divIcon({
     className: "locationPendingConfirm-marker",
-    html: buildPendingLocationConfirmIconHtml(dotColor),
+    html: buildPendingLocationConfirmIconHtml(dotColor, pendingSvg),
     iconSize: [52, 44],
     iconAnchor: [26, 44]
   });
@@ -739,7 +773,7 @@ function rebuildFromState() {
       typeof loc.x === "number" && typeof loc.y === "number"
         ? epsg2263XYToLatLng(loc.x, loc.y)
         : L.latLng(loc.lat, loc.lng);
-    const marker = L.marker(latlng, { icon: markerIcon(meta.color), draggable: false });
+    const marker = L.marker(latlng, { icon: markerIcon(loc.locationType, meta.color), draggable: false });
     const companyNote =
       loc.locationType === "workplace" && state.industry?.companyName
         ? `<br/>${escapeHtml(state.industry.companyName)}`
@@ -762,7 +796,8 @@ function rebuildFromState() {
       const d = String(b.originOtherDetail ?? "").trim();
       originDesc = d ? `Others (${d})` : "Others";
     }
-    const mk = L.marker(latlng, { icon: markerIcon("#14b8a6"), draggable: false });
+    const originSvg = ORIGIN_TYPE_ICONS[b.originCategoryKey];
+    const mk = L.marker(latlng, { icon: originSvg ? markerIconFromSvg(originSvg) : markerIconColored("#14b8a6"), draggable: false });
     mk.bindPopup(
       `Raw material origin<br/>${escapeHtml(matLabel)}<br/>Where it originates: ${escapeHtml(originDesc)}`
     );
