@@ -543,6 +543,10 @@
                   <input type="radio" name="rawMaterialOriginChoice" value="other" />
                   Others
                 </label>
+                <label class="goodsGate__option goodsGate__option--skip">
+                  <input type="radio" name="rawMaterialOriginChoice" value="skipped" />
+                  I don't know and Skip the question.
+                </label>
               </fieldset>
               <div id="rawMaterialOriginOtherWrap" class="goodsOtherWrap is-hidden">
                 <label class="goodsGate__label" for="rawMaterialOriginOtherInput">Please specify</label>
@@ -562,6 +566,15 @@
           </div>
 
           <div id="map"></div>
+          <div
+            id="rawMaterialOriginMapSkipWrap"
+            class="rawMaterialOriginMapSkipWrap is-hidden"
+            aria-hidden="true"
+          >
+            <button type="button" class="ghostBtn rawMaterialOriginMapSkipBtn" id="rawMaterialOriginMapSkipBtn">
+              I don't know and Skip the question.
+            </button>
+          </div>
           <div class="mapHint" id="mapHint">
             Select a tool on the left, then click the map to add points or draw
             segments.

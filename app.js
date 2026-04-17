@@ -68,6 +68,8 @@ const RAW_MATERIAL_ORIGIN_OPTIONS = [
   { key: "other", label: "Others" }
 ];
 const RAW_MATERIAL_ORIGIN_KEYS = new Set(RAW_MATERIAL_ORIGIN_OPTIONS.map((o) => o.key));
+/** Participant skipped the whole origin branch (category + map) for this material. */
+const RAW_MATERIAL_ORIGIN_SKIPPED_KEY = "skipped";
 
 function normalizeRawMaterialsFromPayload(raw) {
   if (!Array.isArray(raw)) return [];
@@ -84,14 +86,17 @@ function normalizeRawMaterialBranchesFromPayload(rawMaterials, branchesIn) {
   for (let i = 0; i < n; i++) {
     const b = arr[i] || {};
     const key = String(b.originCategoryKey ?? "").trim();
-    const originCategoryKey = RAW_MATERIAL_ORIGIN_KEYS.has(key) ? key : "";
+    let originCategoryKey = "";
+    if (key === RAW_MATERIAL_ORIGIN_SKIPPED_KEY) originCategoryKey = RAW_MATERIAL_ORIGIN_SKIPPED_KEY;
+    else if (RAW_MATERIAL_ORIGIN_KEYS.has(key)) originCategoryKey = key;
     const ox = b.originX;
     const oy = b.originY;
     out.push({
       originCategoryKey,
       originOtherDetail: String(b.originOtherDetail ?? ""),
       originX: typeof ox === "number" && Number.isFinite(ox) ? ox : null,
-      originY: typeof oy === "number" && Number.isFinite(oy) ? oy : null
+      originY: typeof oy === "number" && Number.isFinite(oy) ? oy : null,
+      originMapSkipped: Boolean(b.originMapSkipped)
     });
   }
   return out;
@@ -109,18 +114,40 @@ function ensureRawMaterialBranchesAligned() {
         originCategoryKey: String(prev.originCategoryKey ?? ""),
         originOtherDetail: String(prev.originOtherDetail ?? ""),
         originX: typeof prev.originX === "number" && Number.isFinite(prev.originX) ? prev.originX : null,
-        originY: typeof prev.originY === "number" && Number.isFinite(prev.originY) ? prev.originY : null
+        originY: typeof prev.originY === "number" && Number.isFinite(prev.originY) ? prev.originY : null,
+        originMapSkipped: Boolean(prev.originMapSkipped)
       });
     } else {
       next.push({
         originCategoryKey: "",
         originOtherDetail: "",
         originX: null,
-        originY: null
+        originY: null,
+        originMapSkipped: false
       });
     }
   }
   state.industry.rawMaterialBranches = next;
+}
+
+function rawMaterialOriginBranchNeedsCategoryGate(b) {
+  if (!b?.originCategoryKey) return true;
+  if (b.originCategoryKey === RAW_MATERIAL_ORIGIN_SKIPPED_KEY) return false;
+  if (b.originCategoryKey === "other" && !String(b.originOtherDetail ?? "").trim()) return true;
+  return false;
+}
+
+function rawMaterialOriginBranchNeedsMap(b) {
+  if (!b?.originCategoryKey || b.originCategoryKey === RAW_MATERIAL_ORIGIN_SKIPPED_KEY) return false;
+  if (b.originCategoryKey === "other" && !String(b.originOtherDetail ?? "").trim()) return false;
+  const hasCoords =
+    typeof b.originX === "number" &&
+    Number.isFinite(b.originX) &&
+    typeof b.originY === "number" &&
+    Number.isFinite(b.originY);
+  if (hasCoords) return false;
+  if (b.originMapSkipped) return false;
+  return true;
 }
 
 function formatGold(n) {
@@ -642,12 +669,14 @@ function commitPendingLocation() {
       originCategoryKey: "",
       originOtherDetail: "",
       originX: null,
-      originY: null
+      originY: null,
+      originMapSkipped: false
     };
     state.industry.rawMaterialBranches[materialIndex] = {
       ...row,
       originX: x,
-      originY: y
+      originY: y,
+      originMapSkipped: false
     };
     ui.rawMaterialBranchMap = null;
     void flushSaveToServer();
@@ -816,6 +845,7 @@ function uiUpdateStats() {
 
   updateParticipantCompanyBanner();
   updateParticipantRawMaterialOriginBanner();
+  if (SURVEY_MODE === "participant") syncRawMaterialOriginMapSkipVisibility();
 }
 
 function shouldShowParticipantCompanyBanner() {
@@ -1363,7 +1393,8 @@ function exportAllDataCSVFromState(stateObj, participantMeta = null) {
           origin: b.originCategoryKey ?? "",
           originOther: String(b.originOtherDetail ?? ""),
           originX: typeof b.originX === "number" ? b.originX : null,
-          originY: typeof b.originY === "number" ? b.originY : null
+          originY: typeof b.originY === "number" ? b.originY : null,
+          originMapSkipped: Boolean(b.originMapSkipped)
         };
       })
     );
@@ -1772,7 +1803,8 @@ function setParticipantMapHintAfterIndustryGate() {
     const idx = ui.rawMaterialBranchMap.materialIndex;
     const name = String(state.industry.rawMaterials[idx] ?? "").trim() || "this material";
     ui.locationType = "none";
-    hintEl.textContent = `Originating location for “${name}”: click the map to place a point, then confirm with √ or cancel with ×.`;
+    hintEl.textContent = `Originating location for “${name}”: click the map to place a point, then confirm with √ or cancel with ×. You can also skip if you don't know the location.`;
+    syncRawMaterialOriginMapSkipVisibility();
     return;
   }
 
@@ -1786,6 +1818,7 @@ function setParticipantMapHintAfterIndustryGate() {
     hintEl.textContent =
       "Select a location type on the left, then click the map to add points or draw routes on later steps.";
   }
+  syncRawMaterialOriginMapSkipVisibility();
 }
 
 function syncParticipantMapGateOverlay() {
@@ -1809,6 +1842,19 @@ function syncParticipantMapGateOverlay() {
   else delete document.body.dataset.mapGateOpen;
   updateParticipantCompanyBanner();
   updateParticipantRawMaterialOriginBanner();
+  syncRawMaterialOriginMapSkipVisibility();
+}
+
+function syncRawMaterialOriginMapSkipVisibility() {
+  const wrap = document.getElementById("rawMaterialOriginMapSkipWrap");
+  if (!wrap) return;
+  const show =
+    SURVEY_MODE === "participant" &&
+    !readOnly &&
+    ui.activeStep === "locations" &&
+    ui.rawMaterialBranchMap !== null;
+  wrap.classList.toggle("is-hidden", !show);
+  wrap.setAttribute("aria-hidden", show ? "false" : "true");
 }
 
 function participantHasWorkplaceLocation() {
@@ -2179,9 +2225,8 @@ function participantRawMaterialBranchWorkIncomplete() {
   ensureRawMaterialBranchesAligned();
   for (let i = 0; i < mats.length; i++) {
     const b = state.industry.rawMaterialBranches[i];
-    if (!b?.originCategoryKey) return true;
-    if (b.originCategoryKey === "other" && !String(b.originOtherDetail ?? "").trim()) return true;
-    if (typeof b.originX !== "number" || typeof b.originY !== "number") return true;
+    if (rawMaterialOriginBranchNeedsCategoryGate(b)) return true;
+    if (rawMaterialOriginBranchNeedsMap(b)) return true;
   }
   return false;
 }
@@ -2196,15 +2241,11 @@ function resumeRawMaterialBranchFlow() {
   const mats = state.industry.rawMaterials ?? [];
   for (let i = 0; i < mats.length; i++) {
     const b = state.industry.rawMaterialBranches[i];
-    if (!b?.originCategoryKey) {
+    if (rawMaterialOriginBranchNeedsCategoryGate(b)) {
       openRawMaterialOriginQuestionGate(i);
       return;
     }
-    if (b.originCategoryKey === "other" && !String(b.originOtherDetail ?? "").trim()) {
-      openRawMaterialOriginQuestionGate(i);
-      return;
-    }
-    if (typeof b.originX !== "number" || typeof b.originY !== "number") {
+    if (rawMaterialOriginBranchNeedsMap(b)) {
       ui.rawMaterialBranchMap = { materialIndex: i };
       ui.rawMaterialOriginEditingIndex = null;
       syncParticipantMapGateOverlay();
@@ -2253,8 +2294,42 @@ function openRawMaterialOriginQuestionGate(materialIndex) {
   gate.classList.add("is-open");
   syncParticipantMapGateOverlay();
   requestAnimationFrame(() => {
-    document.querySelector('input[name="rawMaterialOriginChoice"]')?.focus();
+    const checked = document.querySelector('input[name="rawMaterialOriginChoice"]:checked');
+    if (checked) checked.focus();
+    else document.querySelector('input[name="rawMaterialOriginChoice"]')?.focus();
   });
+}
+
+function skipRawMaterialOriginMap() {
+  if (readOnly || SURVEY_MODE !== "participant") return;
+  const idx = ui.rawMaterialBranchMap?.materialIndex;
+  if (idx == null || idx < 0) return;
+  clearPendingLocation();
+  ensureRawMaterialBranchesAligned();
+  const row = state.industry.rawMaterialBranches[idx] ?? {};
+  if (row.originCategoryKey === RAW_MATERIAL_ORIGIN_SKIPPED_KEY) return;
+  state.industry.rawMaterialBranches[idx] = {
+    ...row,
+    originMapSkipped: true,
+    originX: null,
+    originY: null
+  };
+  ui.rawMaterialBranchMap = null;
+  void flushSaveToServer();
+  rebuildFromState();
+  uiUpdateStats();
+  setParticipantMapHintAfterIndustryGate();
+  advanceAfterRawMaterialOriginPlaced(idx);
+}
+
+function initParticipantRawMaterialOriginMapSkipOnce() {
+  if (SURVEY_MODE !== "participant" || document.body.dataset.participantRawMaterialMapSkipBound === "1") {
+    return;
+  }
+  const btn = document.getElementById("rawMaterialOriginMapSkipBtn");
+  if (!btn) return;
+  document.body.dataset.participantRawMaterialMapSkipBound = "1";
+  btn.addEventListener("click", () => skipRawMaterialOriginMap());
 }
 
 function initParticipantRawMaterialOriginGateOnce() {
@@ -2270,7 +2345,8 @@ function initParticipantRawMaterialOriginGateOnce() {
 
   document.querySelectorAll('input[name="rawMaterialOriginChoice"]').forEach((radio) => {
     radio.addEventListener("change", () => {
-      const show = radio.value === "other" && radio.checked;
+      const checked = document.querySelector('input[name="rawMaterialOriginChoice"]:checked');
+      const show = checked?.value === "other";
       otherWrap?.classList.toggle("is-hidden", !show);
       if (show) otherInput?.focus();
     });
@@ -2285,7 +2361,32 @@ function initParticipantRawMaterialOriginGateOnce() {
     if (idx == null || idx < 0) return;
     const sel = document.querySelector('input[name="rawMaterialOriginChoice"]:checked');
     if (!sel) {
-      window.alert("Please select where this raw material originates.");
+      window.alert("Please select an option.");
+      return;
+    }
+    if (sel.value === RAW_MATERIAL_ORIGIN_SKIPPED_KEY) {
+      ensureRawMaterialBranchesAligned();
+      state.industry.rawMaterialBranches[idx] = {
+        ...state.industry.rawMaterialBranches[idx],
+        originCategoryKey: RAW_MATERIAL_ORIGIN_SKIPPED_KEY,
+        originOtherDetail: "",
+        originX: null,
+        originY: null,
+        originMapSkipped: false
+      };
+      gate.classList.remove("is-open");
+      syncParticipantMapGateOverlay();
+      ui.rawMaterialBranchMap = null;
+      ui.rawMaterialOriginEditingIndex = null;
+      void flushSaveToServer();
+      rebuildFromState();
+      uiUpdateStats();
+      setParticipantMapHintAfterIndustryGate();
+      advanceAfterRawMaterialOriginPlaced(idx);
+      if (map) {
+        requestAnimationFrame(() => map.invalidateSize());
+        setTimeout(() => map.invalidateSize(), 200);
+      }
       return;
     }
     let detail = "";
@@ -2300,7 +2401,10 @@ function initParticipantRawMaterialOriginGateOnce() {
     state.industry.rawMaterialBranches[idx] = {
       ...state.industry.rawMaterialBranches[idx],
       originCategoryKey: sel.value,
-      originOtherDetail: sel.value === "other" ? detail : ""
+      originOtherDetail: sel.value === "other" ? detail : "",
+      originMapSkipped: false,
+      originX: null,
+      originY: null
     };
     gate.classList.remove("is-open");
     syncParticipantMapGateOverlay();
@@ -2334,6 +2438,7 @@ async function finishParticipantBoot() {
   initParticipantGoodsGateOnce();
   initParticipantRawMaterialsGateOnce();
   initParticipantRawMaterialOriginGateOnce();
+  initParticipantRawMaterialOriginMapSkipOnce();
 
   if (!document.body.dataset.participantPagehideBound) {
     document.body.dataset.participantPagehideBound = "1";
