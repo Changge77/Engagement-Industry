@@ -656,6 +656,12 @@ html.participant-welcome-ok #welcomeGate {
   accent-color: #c94f7c;
 }
 
+.goodsGate__icon {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+}
+
 .goodsOtherWrap {
   margin-top: 4px;
 }
