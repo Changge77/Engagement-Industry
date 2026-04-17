@@ -82,7 +82,7 @@ app.post("/api/participants", (req, res) => {
   const base =
     PUBLIC_BASE_URL ||
     `${req.protocol}://${req.get("host")}`;
-  const url = `${base}/index.html?participant=${encodeURIComponent(id)}&token=${encodeURIComponent(token)}`;
+  const url = `${base}/sub.html?participant=${encodeURIComponent(id)}&token=${encodeURIComponent(token)}`;
 
   res.json({ id, label, token, shareUrl: url });
 });
@@ -165,7 +165,7 @@ app.use(express.static(__dirname));
 
 app.listen(PORT, () => {
   console.log(`Survey server http://localhost:${PORT}`);
-  console.log(`Main (conductor): http://localhost:${PORT}/main.html`);
+  console.log(`Main (conductor): http://localhost:${PORT}/index.html`);
   if (CONDUCTOR_SECRET) {
     console.warn("Note: CONDUCTOR_SECRET is set but conductor auth is currently disabled.");
   }

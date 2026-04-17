@@ -1,0 +1,430 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Urban Supply Chain Survey (NYC)</title>
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+    <script>
+      (function () {
+        try {
+          var p = new URLSearchParams(location.search);
+          if (p.get("participant") && p.get("token")) {
+            document.documentElement.classList.add("participant-token-ok");
+          }
+          if (sessionStorage.getItem("participantWelcomeConfirmed") === "1") {
+            document.documentElement.classList.add("participant-welcome-ok");
+          }
+        } catch (e) {}
+      })();
+    </script>
+  </head>
+  <body data-survey-mode="participant">
+    <div id="participantGate" class="participantGate" role="dialog" aria-live="polite">
+      <div class="participantGate__card">
+        <h1 class="participantGate__h1">Survey link required</h1>
+        <p class="participantGate__p">
+          Open the unique link your facilitator sent you. This page does not work without
+          <code class="participantGate__code">?participant=…&amp;token=…</code> in the address bar.
+        </p>
+      </div>
+    </div>
+
+    <div id="welcomeGate" class="participantGate" role="dialog" aria-live="polite">
+      <div class="participantGate__card welcomeGate__card">
+        <h1 class="participantGate__h1">Welcome and thank you to participate in our survey!</h1>
+        <p class="participantGate__p welcomeGate__p">
+          This survey is about gathering information about the industry along IBX. You may need to answer a sequence
+          of questions about the industry work you are working on, helping us make a better arrangement for freight
+          transportation with IBX.
+        </p>
+        <div class="participantGate__actions">
+          <button class="primaryBtn" id="welcomeConfirmBtn" type="button">Confirm</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="app">
+      <header class="topbar">
+        <div class="topbar__title">NYC Supply Chain Survey</div>
+        <div class="topbar__meta">
+          <span class="pill" id="activeStepPill">Step 1: Locations</span>
+        </div>
+      </header>
+
+      <main class="layout">
+        <aside class="panel">
+          <nav class="tabs">
+            <button class="tab is-active" data-step="locations" type="button">
+              1. Locations
+            </button>
+            <button class="tab" data-step="currentRoutes" type="button">
+              2. Current Distribution
+            </button>
+            <button class="tab" data-step="ibxRoutes" type="button">
+              3. IBX Assumption
+            </button>
+            <button class="tab" data-step="export" type="button">
+              4. Export
+            </button>
+          </nav>
+
+          <section class="step" data-step-panel="locations">
+            <h2 class="panel__h2">Mark optional locations</h2>
+            <p class="panel__hint participantIndustrySummary is-hidden" id="participantIndustrySummary"></p>
+            <p class="panel__hint">
+              Choose a location type, then click the map to add a point. Start with your workplace, then add other
+              sites if you like.
+            </p>
+
+            <div class="buttonRow">
+              <button
+                class="modeBtn"
+                data-location-type="workplace"
+                type="button"
+              >
+                Workplace (your company)
+              </button>
+              <button
+                class="modeBtn"
+                data-location-type="import"
+                type="button"
+              >
+                Import location
+              </button>
+              <button
+                class="modeBtn"
+                data-location-type="export"
+                type="button"
+              >
+                Export location
+              </button>
+              <button
+                class="modeBtn"
+                data-location-type="manufacturing"
+                type="button"
+              >
+                Manufacturing
+              </button>
+              <button
+                class="modeBtn"
+                data-location-type="warehouse"
+                type="button"
+              >
+                Warehouse
+              </button>
+              <button
+                class="modeBtn"
+                data-location-type="subdistribution"
+                type="button"
+              >
+                Subdistribution
+              </button>
+              <button
+                class="modeBtn"
+                data-location-type="other"
+                type="button"
+              >
+                Other
+              </button>
+              <button
+                class="modeBtn is-muted"
+                data-location-type="none"
+                type="button"
+              >
+                No placement
+              </button>
+            </div>
+
+            <div class="panelActions">
+              <button class="ghostBtn" id="clearLocations" type="button">
+                Clear locations
+              </button>
+              <div class="miniStat">
+                <div class="miniStat__label">Locations added</div>
+                <div class="miniStat__value" id="locationsCount">0</div>
+              </div>
+            </div>
+          </section>
+
+          <section class="step is-hidden" data-step-panel="currentRoutes">
+            <h2 class="panel__h2">Draw current distribution routes</h2>
+            <p class="panel__hint">
+              Draw one route segment at a time. Each time you switch the
+              transport mode, we treat it as a transfer and apply the transfer
+              costs provided in your specification.
+            </p>
+
+            <div class="buttonRow">
+              <button class="modeBtn" data-route-mode="huge" type="button">
+                Huge Truck
+              </button>
+              <button class="modeBtn" data-route-mode="small" type="button">
+                Small Truck
+              </button>
+              <button class="modeBtn" data-route-mode="train" type="button">
+                Train
+              </button>
+            </div>
+
+            <div class="routeControls">
+              <button class="primaryBtn" id="startSegmentCurrent" type="button">
+                Start segment
+              </button>
+              <button
+                class="ghostBtn"
+                id="finishSegmentCurrent"
+                type="button"
+                disabled
+              >
+                Finish segment
+              </button>
+              <button
+                class="ghostBtn"
+                id="undoPointCurrent"
+                type="button"
+                disabled
+              >
+                Undo last point
+              </button>
+              <button
+                class="ghostBtn"
+                id="cancelSegmentCurrent"
+                type="button"
+                disabled
+              >
+                Cancel
+              </button>
+            </div>
+
+            <div class="panelActions">
+              <button class="ghostBtn" id="clearCurrentRoutes" type="button">
+                Clear current routes
+              </button>
+              <div class="miniStat">
+                <div class="miniStat__label">Current total cost</div>
+                <div class="miniStat__value" id="currentTotalGold">0</div>
+              </div>
+            </div>
+
+            <div class="panel__note">
+              Transfer cost matrix is applied for the directions you provided.
+              If you need the reverse directions too, tell me and I’ll update
+              the table in the code.
+            </div>
+          </section>
+
+          <section class="step is-hidden" data-step-panel="ibxRoutes">
+            <h2 class="panel__h2">Draw IBX assumption routes</h2>
+            <p class="panel__hint">
+              IBX railway line will be highlighted. Draw segments similarly to
+              the current routes. Use “IBX Rail” when your route relies on the
+              IBX railway.
+            </p>
+
+            <div class="buttonRow">
+              <button class="modeBtn" data-route-mode="huge_ibx" type="button">
+                Huge Truck
+              </button>
+              <button class="modeBtn" data-route-mode="small_ibx" type="button">
+                Small Truck
+              </button>
+              <button class="modeBtn" data-route-mode="ibx" type="button">
+                IBX Rail
+              </button>
+            </div>
+
+            <div class="routeControls">
+              <button class="primaryBtn" id="startSegmentIbX" type="button">
+                Start segment
+              </button>
+              <button
+                class="ghostBtn"
+                id="finishSegmentIbX"
+                type="button"
+                disabled
+              >
+                Finish segment
+              </button>
+              <button
+                class="ghostBtn"
+                id="undoPointIbX"
+                type="button"
+                disabled
+              >
+                Undo last point
+              </button>
+              <button
+                class="ghostBtn"
+                id="cancelSegmentIbX"
+                type="button"
+                disabled
+              >
+                Cancel
+              </button>
+            </div>
+
+            <div class="panelActions">
+              <button class="ghostBtn" id="clearIbxRoutes" type="button">
+                Clear IBX routes
+              </button>
+              <div class="miniStat">
+                <div class="miniStat__label">IBX total cost</div>
+                <div class="miniStat__value" id="ibxTotalGold">0</div>
+              </div>
+            </div>
+
+            <div class="panel__note">
+              The IBX railway line and stations are loaded automatically from
+              <code>IBX_Line_4326.geojson</code> and <code>IBX_Stations.geojson</code>.
+              If the files fail to load (for example, when using <code>file://</code>), a
+              placeholder is shown.
+            </div>
+          </section>
+
+          <section class="step is-hidden" data-step-panel="export">
+            <h2 class="panel__h2">Export your survey data</h2>
+            <p class="panel__hint">
+              Download a CSV for all collected data, and download route geometry
+              as GeoJSON exported in EPSG:2263.
+            </p>
+
+            <div class="panelActions">
+              <button class="primaryBtn" id="exportCSV" type="button">
+                Download CSV (all data)
+              </button>
+              <button class="primaryBtn" id="exportRoutesGeoJSON" type="button">
+                Download Routes GeoJSON (EPSG:2263)
+              </button>
+            </div>
+
+            <div class="exportSummary">
+              <div class="exportSummary__item">
+                <span class="exportSummary__label">Locations</span>
+                <span class="exportSummary__value" id="exportLocationsCount"
+                  >0</span
+                >
+              </div>
+              <div class="exportSummary__item">
+                <span class="exportSummary__label">Current segments</span>
+                <span class="exportSummary__value" id="exportCurrentSegments"
+                  >0</span
+                >
+              </div>
+              <div class="exportSummary__item">
+                <span class="exportSummary__label">IBX segments</span>
+                <span class="exportSummary__value" id="exportIbXSegments">0</span>
+              </div>
+            </div>
+
+            <div class="panel__note">
+              GeoJSON uses the deprecated `crs` member to declare EPSG:2263,
+              because the standard does not require a CRS for consumer software.
+              If you want a different CRS packaging approach, tell me what tool
+              you’ll use to import the file.
+            </div>
+          </section>
+        </aside>
+
+        <section class="mapWrap">
+          <div
+            id="participantCompanyBanner"
+            class="mapCompanyHint is-hidden"
+            aria-hidden="true"
+          >
+            Please Mark Your Company Location
+          </div>
+
+          <div
+            id="industryGate"
+            class="industryGate industryGate--floating"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="industryGateTitle"
+          >
+            <div class="participantGate__card industryGate__card">
+              <h2 class="industryGate__title" id="industryGateTitle">What industry company do you work in?</h2>
+              <p class="participantGate__p industryGate__intro">
+                Please type the name of industry company you work in.<br />
+                Next, please mark the company’s location on the map.
+              </p>
+              <label class="industryGate__label" for="industryCompanyInput">Your answer</label>
+              <input
+                id="industryCompanyInput"
+                class="industryGate__input"
+                type="text"
+                maxlength="500"
+                autocomplete="organization"
+                placeholder="e.g. ABC Logistics, food manufacturing, etc."
+              />
+              <div class="participantGate__actions">
+                <button class="primaryBtn" id="industryContinueBtn" type="button">Continue to map</button>
+              </div>
+            </div>
+          </div>
+
+          <div
+            id="roleGate"
+            class="roleGate roleGate--floating"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="roleGateTitle"
+          >
+            <div class="participantGate__card roleGate__card">
+              <h2 class="roleGate__title" id="roleGateTitle">What is your role/job in the industry company?</h2>
+              <p class="participantGate__p roleGate__intro">Choose the option that best describes your role.</p>
+              <fieldset class="roleGate__fieldset">
+                <legend class="roleGate__legend">Your role</legend>
+                <label class="roleGate__option">
+                  <input type="radio" name="participantRole" value="manager" />
+                  Manager
+                </label>
+                <label class="roleGate__option">
+                  <input type="radio" name="participantRole" value="worker" />
+                  Worker
+                </label>
+                <label class="roleGate__option">
+                  <input type="radio" name="participantRole" value="transporter" />
+                  Transporter
+                </label>
+                <label class="roleGate__option">
+                  <input type="radio" name="participantRole" value="other" />
+                  Others
+                </label>
+              </fieldset>
+              <div id="roleOtherWrap" class="roleOtherWrap is-hidden">
+                <label class="roleGate__label" for="roleOtherInput">Please specify</label>
+                <input
+                  id="roleOtherInput"
+                  class="roleGate__input"
+                  type="text"
+                  maxlength="200"
+                  autocomplete="off"
+                  placeholder="Describe your role"
+                />
+              </div>
+              <div class="participantGate__actions">
+                <button class="primaryBtn" id="roleContinueBtn" type="button">Continue</button>
+              </div>
+            </div>
+          </div>
+
+          <div id="map"></div>
+          <div class="mapHint" id="mapHint">
+            Select a tool on the left, then click the map to add points or draw
+            segments.
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6.5.0/turf.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.9.2/proj4.js"></script>
+    <script src="./app.js"></script>
+  </body>
+</html>

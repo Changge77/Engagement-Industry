@@ -607,7 +607,7 @@ html:not(.participant-token-ok) body[data-survey-mode="participant"] #app {
   line-height: 1.65;
 }
 
-/* Conductor main.html */
+/* Conductor index.html */
 .conductorLogin {
   min-height: 100vh;
   display: flex;
