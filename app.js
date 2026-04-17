@@ -16,6 +16,9 @@ let saveDebounceTimer = null;
 let viewingParticipantId = null;
 let viewingParticipantLabel = "";
 
+/** Participant map only: short company-location hint follows pointer while over the map. */
+let companyBannerPointerOnMap = false;
+
 const COST_PER_MILE_GOLD = {
   huge: 1.0,
   small: 0.5,
@@ -547,21 +550,62 @@ function uiUpdateStats() {
   updateParticipantCompanyBanner();
 }
 
-function updateParticipantCompanyBanner() {
-  const el = document.getElementById("participantCompanyBanner");
-  if (!el) return;
+function shouldShowParticipantCompanyBanner() {
   const hasWorkplace = state.locations.some((l) => l.locationType === "workplace");
   const mapGatesOpen = Boolean(
     document.getElementById("industryGate")?.classList.contains("is-open") ||
       document.getElementById("roleGate")?.classList.contains("is-open")
   );
-  const show =
+  return (
     SURVEY_MODE === "participant" &&
     !readOnly &&
     ui.activeStep === "locations" &&
     !hasWorkplace &&
-    !mapGatesOpen;
-  el.classList.toggle("is-hidden", !show);
+    !mapGatesOpen
+  );
+}
+
+function syncParticipantCompanyBannerVisibility() {
+  const el = document.getElementById("participantCompanyBanner");
+  if (!el) return;
+  const show = shouldShowParticipantCompanyBanner();
+  if (!show) companyBannerPointerOnMap = false;
+  else if (map?.getContainer()?.matches?.(":hover")) companyBannerPointerOnMap = true;
+  const visible = show && companyBannerPointerOnMap;
+  el.classList.toggle("is-hidden", !visible);
+  el.setAttribute("aria-hidden", visible ? "false" : "true");
+  if (!visible) {
+    el.style.left = "";
+    el.style.top = "";
+    return;
+  }
+  if (!el.style.left) {
+    const wrap = el.closest(".mapWrap");
+    const r = wrap?.getBoundingClientRect();
+    if (r) positionParticipantCompanyBanner(r.left + r.width / 2, r.top + r.height / 2);
+  }
+}
+
+function positionParticipantCompanyBanner(clientX, clientY) {
+  const el = document.getElementById("participantCompanyBanner");
+  const wrap = el?.closest(".mapWrap");
+  if (!el || !wrap || el.classList.contains("is-hidden")) return;
+  const rect = wrap.getBoundingClientRect();
+  const offX = 14;
+  const offY = 14;
+  let x = clientX - rect.left + offX;
+  let y = clientY - rect.top + offY;
+  const bw = el.offsetWidth || 1;
+  const bh = el.offsetHeight || 1;
+  const pad = 8;
+  x = Math.min(Math.max(pad, x), Math.max(pad, rect.width - bw - pad));
+  y = Math.min(Math.max(pad, y), Math.max(pad, rect.height - bh - pad));
+  el.style.left = `${x}px`;
+  el.style.top = `${y}px`;
+}
+
+function updateParticipantCompanyBanner() {
+  syncParticipantCompanyBannerVisibility();
 }
 
 function setStep(step) {
@@ -1251,6 +1295,20 @@ function setupMap() {
     }
 
     if (ui.locationType !== "none") addLocation(ui.locationType, e.latlng);
+  });
+
+  const mapContainer = map.getContainer();
+  const onParticipantCompanyBannerPointer = (e) => {
+    if (!shouldShowParticipantCompanyBanner()) return;
+    companyBannerPointerOnMap = true;
+    syncParticipantCompanyBannerVisibility();
+    positionParticipantCompanyBanner(e.clientX, e.clientY);
+  };
+  mapContainer.addEventListener("mousemove", onParticipantCompanyBannerPointer);
+  mapContainer.addEventListener("mouseenter", onParticipantCompanyBannerPointer);
+  mapContainer.addEventListener("mouseleave", () => {
+    companyBannerPointerOnMap = false;
+    syncParticipantCompanyBannerVisibility();
   });
 }
 

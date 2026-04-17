@@ -287,12 +287,11 @@ body {
   box-shadow: 0 4px 24px var(--shadow);
 }
 
-/* Small pop-up on map only: prompt to mark workplace (participant) */
+/* Cursor-following hint on map only: prompt to mark workplace (participant); position via JS */
 .mapCompanyHint {
   position: absolute;
-  left: 50%;
-  top: 12px;
-  transform: translateX(-50%);
+  left: 0;
+  top: 0;
   z-index: 415;
   max-width: min(320px, calc(100% - 24px));
   padding: 8px 14px;
