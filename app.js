@@ -987,6 +987,7 @@ function addLocation(type, latlng) {
   if (SURVEY_MODE === "participant" && type === "workplace") {
     maybeOpenParticipantRoleGate();
     if (!participantNeedsRoleGate()) maybeOpenParticipantGoodsGate();
+    setParticipantMapHintAfterIndustryGate();
   }
 }
 
@@ -1654,6 +1655,7 @@ function initParticipantRoleGateOnce() {
     void flushSaveToServer();
     rebuildFromState();
     uiUpdateStats();
+    setParticipantMapHintAfterIndustryGate();
     if (map) {
       requestAnimationFrame(() => map.invalidateSize());
       setTimeout(() => map.invalidateSize(), 200);
@@ -1740,6 +1742,7 @@ function initParticipantGoodsGateOnce() {
     void flushSaveToServer();
     rebuildFromState();
     uiUpdateStats();
+    setParticipantMapHintAfterIndustryGate();
     if (map) {
       requestAnimationFrame(() => map.invalidateSize());
       setTimeout(() => map.invalidateSize(), 200);
@@ -1860,6 +1863,7 @@ async function bootParticipant() {
       void flushSaveToServer();
       rebuildFromState();
       uiUpdateStats();
+      setParticipantMapHintAfterIndustryGate();
       if (map) {
         requestAnimationFrame(() => map.invalidateSize());
         setTimeout(() => map.invalidateSize(), 200);
