@@ -199,6 +199,13 @@ function normalizeRawMaterialBranchesFromPayload(rawMaterials, branchesIn) {
     const ox = b.originX;
     const oy = b.originY;
     const diagram = normalizeSupplyChainDiagram(b.supplyChainDiagram);
+    let tripFrequencyCount = null;
+    const tc = b.tripFrequencyCount;
+    if (typeof tc === "number" && Number.isFinite(tc) && tc >= 1) tripFrequencyCount = Math.floor(tc);
+    else if (tc != null && String(tc).trim() !== "") {
+      const n = Number(tc);
+      if (Number.isFinite(n) && n >= 1) tripFrequencyCount = Math.floor(n);
+    }
     out.push({
       originCategoryKey,
       originOtherDetail: String(b.originOtherDetail ?? ""),
@@ -207,7 +214,9 @@ function normalizeRawMaterialBranchesFromPayload(rawMaterials, branchesIn) {
       originMapSkipped: Boolean(b.originMapSkipped),
       supplyChainIntroAcknowledged: Boolean(b.supplyChainIntroAcknowledged),
       supplyChainDiagram: diagram,
-      supplyChainTransportRoutes: normalizeSupplyChainTransportRoutesForBranch(b.supplyChainTransportRoutes, diagram)
+      supplyChainTransportRoutes: normalizeSupplyChainTransportRoutesForBranch(b.supplyChainTransportRoutes, diagram),
+      tripFrequencyCount,
+      tripFrequencyPeriod: normalizeTripFrequencyPeriod(b.tripFrequencyPeriod)
     });
   }
   return out;
@@ -222,6 +231,9 @@ function ensureRawMaterialBranchesAligned() {
     const prev = branches[i];
     if (prev && typeof prev === "object") {
       const diagram = normalizeSupplyChainDiagram(prev.supplyChainDiagram ?? defaultSupplyChainDiagram());
+      let tripFrequencyCount = null;
+      const tfc = prev.tripFrequencyCount;
+      if (typeof tfc === "number" && Number.isFinite(tfc) && tfc >= 1) tripFrequencyCount = Math.floor(tfc);
       next.push({
         originCategoryKey: String(prev.originCategoryKey ?? ""),
         originOtherDetail: String(prev.originOtherDetail ?? ""),
@@ -233,7 +245,9 @@ function ensureRawMaterialBranchesAligned() {
         supplyChainTransportRoutes: normalizeSupplyChainTransportRoutesForBranch(
           prev.supplyChainTransportRoutes,
           diagram
-        )
+        ),
+        tripFrequencyCount,
+        tripFrequencyPeriod: normalizeTripFrequencyPeriod(prev.tripFrequencyPeriod)
       });
     } else {
       const diagram = defaultSupplyChainDiagram();
@@ -245,7 +259,9 @@ function ensureRawMaterialBranchesAligned() {
         originMapSkipped: false,
         supplyChainIntroAcknowledged: false,
         supplyChainDiagram: diagram,
-        supplyChainTransportRoutes: normalizeSupplyChainTransportRoutesForBranch([], diagram)
+        supplyChainTransportRoutes: normalizeSupplyChainTransportRoutesForBranch([], diagram),
+        tripFrequencyCount: null,
+        tripFrequencyPeriod: ""
       });
     }
   }
@@ -505,6 +521,33 @@ function rawMaterialSupplyChainBranchNeedsTransportRoutes(b) {
   return !isSupplyChainTransportRoutesComplete(b);
 }
 
+const TRIP_FREQUENCY_PERIOD_KEYS = new Set(["day", "week", "month"]);
+
+function normalizeTripFrequencyPeriod(k) {
+  const s = String(k ?? "")
+    .trim()
+    .toLowerCase();
+  return TRIP_FREQUENCY_PERIOD_KEYS.has(s) ? s : "";
+}
+
+function isTripFrequencyComplete(b) {
+  const per = normalizeTripFrequencyPeriod(b?.tripFrequencyPeriod);
+  if (!per) return false;
+  const n = b?.tripFrequencyCount;
+  const num = typeof n === "number" ? n : Number(n);
+  return Number.isFinite(num) && num >= 1 && Math.floor(num) === num;
+}
+
+/** After all transport routes are drawn: how often does this trip occur (popup, then left panel). */
+function rawMaterialSupplyChainBranchNeedsTripFrequencyGate(b) {
+  if (!b) return false;
+  if (b.originCategoryKey === RAW_MATERIAL_ORIGIN_SKIPPED_KEY) return false;
+  if (rawMaterialOriginBranchNeedsCategoryGate(b) || rawMaterialOriginBranchNeedsMap(b)) return false;
+  if (!isSupplyChainDiagramComplete(b.supplyChainDiagram)) return false;
+  if (!isSupplyChainTransportRoutesComplete(b)) return false;
+  return !isTripFrequencyComplete(b);
+}
+
 function supplyChainTransportKeyToRouteBaseKey(k) {
   const m = normalizeTransportModeKey(k);
   if (m === "huge_truck") return "huge";
@@ -551,7 +594,9 @@ function clearSupplyChainTransportRoutesFromLeg(materialIndex, fromLegIndex) {
   }
   state.industry.rawMaterialBranches[materialIndex] = {
     ...row,
-    supplyChainTransportRoutes: routes
+    supplyChainTransportRoutes: routes,
+    tripFrequencyCount: null,
+    tripFrequencyPeriod: ""
   };
 }
 
@@ -606,6 +651,7 @@ function resetSupplyChainRouteDraft() {
   if (layers?.supplyChainDraft) layers.supplyChainDraft.clearLayers();
   ui.rawMaterialSupplyChainRouteDrawing = null;
   syncParticipantLeftPanel();
+  updateParticipantSupplyChainRouteEditingUI();
 }
 
 function supplyChainRouteConfirmLabel(d, legIndex) {
@@ -614,6 +660,75 @@ function supplyChainRouteConfirmLabel(d, legIndex) {
   if (last) return "This is Destination";
   const bLab = nodes.length <= 1 ? "B" : `B${legIndex + 1}`;
   return `This is Transportation Mode Change ${bLab}`;
+}
+
+/** Start/end node labels (A, B1, …, C) for the map “Currently Editing” banner. */
+function supplyChainRouteEditingEndpointLabels(d, legIndex) {
+  const nodes = d.modalChangeNodes ?? [];
+  const legs = d.transportLegs ?? [];
+  if (legIndex < 0 || legIndex >= legs.length) return { startLabel: "?", endLabel: "?" };
+  const last = legIndex >= legs.length - 1;
+  let startLabel = "A";
+  if (legIndex > 0) {
+    startLabel = nodes.length <= 1 ? "B" : `B${legIndex}`;
+  }
+  let endLabel = "C";
+  if (!last) {
+    endLabel = nodes.length <= 1 ? "B" : `B${legIndex + 1}`;
+  }
+  return { startLabel, endLabel };
+}
+
+function positionParticipantSupplyChainRouteCursorHint(clientX, clientY) {
+  const el = document.getElementById("participantSupplyChainRouteCursorHint");
+  const wrap = el?.closest(".mapWrap");
+  if (!el || !wrap || el.classList.contains("is-hidden")) return;
+  const rect = wrap.getBoundingClientRect();
+  const offX = 18;
+  const offY = 18;
+  let x = clientX - rect.left + offX;
+  let y = clientY - rect.top + offY;
+  const bw = el.offsetWidth || 1;
+  const bh = el.offsetHeight || 1;
+  const pad = 8;
+  x = Math.min(Math.max(pad, x), Math.max(pad, rect.width - bw - pad));
+  y = Math.min(Math.max(pad, y), Math.max(pad, rect.height - bh - pad));
+  el.style.left = `${x}px`;
+  el.style.top = `${y}px`;
+}
+
+function updateParticipantSupplyChainRouteEditingUI() {
+  const banner = document.getElementById("participantSupplyChainRouteBanner");
+  const hint = document.getElementById("participantSupplyChainRouteCursorHint");
+  if (!banner && !hint) return;
+  const dr = ui.rawMaterialSupplyChainRouteDrawing;
+  const show = SURVEY_MODE === "participant" && !readOnly && dr != null;
+  if (banner) {
+    banner.classList.toggle("is-hidden", !show);
+    banner.setAttribute("aria-hidden", show ? "false" : "true");
+    if (show) {
+      const row = state.industry.rawMaterialBranches[dr.materialIndex];
+      const d = normalizeSupplyChainDiagram(row?.supplyChainDiagram);
+      const leg = d.transportLegs[dr.legIndex] ?? { modeKey: "", otherDetail: "" };
+      const modeLab = formatSupplyChainTransportModeLabel(leg);
+      const { startLabel, endLabel } = supplyChainRouteEditingEndpointLabels(d, dr.legIndex);
+      const fromEl = banner.querySelector("[data-sc-route-banner-from]");
+      const toEl = banner.querySelector("[data-sc-route-banner-to]");
+      const modeEl = banner.querySelector("[data-sc-route-banner-mode]");
+      if (fromEl) fromEl.textContent = startLabel;
+      if (toEl) toEl.textContent = endLabel;
+      if (modeEl) modeEl.textContent = modeLab;
+    }
+  }
+  if (hint) {
+    if (!show) {
+      hint.classList.add("is-hidden");
+      hint.setAttribute("aria-hidden", "true");
+      hint.style.left = "";
+      hint.style.top = "";
+    }
+    /* While drawing, visibility/position follow the pointer via map mousemove. */
+  }
 }
 
 function refreshSupplyChainRouteDraftVisuals() {
@@ -1020,6 +1135,8 @@ const ui = {
   rawMaterialSupplyChainDiagramIndex: null,
   /** Participant: drawing supply-chain transportation routes on the map (after diagram is saved). */
   rawMaterialSupplyChainRouteDrawing: null,
+  /** Participant: material index while the trip-frequency popup is open. */
+  rawMaterialTripFrequencyMaterialIndex: null,
   /** Participant: which raw material is selected in the left panel (diagram detail). */
   participantSelectedRawMaterialIndex: null
 };
@@ -1571,14 +1688,16 @@ function shouldShowParticipantCompanyBanner() {
       document.getElementById("rawMaterialsGate")?.classList.contains("is-open") ||
       document.getElementById("rawMaterialSupplyChainIntroGate")?.classList.contains("is-open") ||
       document.getElementById("rawMaterialSupplyChainDiagramGate")?.classList.contains("is-open") ||
-      document.getElementById("rawMaterialOriginGate")?.classList.contains("is-open")
+      document.getElementById("rawMaterialOriginGate")?.classList.contains("is-open") ||
+      document.getElementById("rawMaterialTripFrequencyGate")?.classList.contains("is-open")
   );
   return (
     SURVEY_MODE === "participant" &&
     !readOnly &&
     ui.activeStep === "locations" &&
     !hasWorkplace &&
-    !mapGatesOpen
+    !mapGatesOpen &&
+    !ui.rawMaterialSupplyChainRouteDrawing
   );
 }
 
@@ -1980,12 +2099,14 @@ function clearLocations() {
   ui.rawMaterialOriginEditingIndex = null;
   ui.rawMaterialSupplyChainIntroIndex = null;
   ui.rawMaterialSupplyChainDiagramIndex = null;
+  ui.rawMaterialTripFrequencyMaterialIndex = null;
   resetSupplyChainRouteDraft();
   document.getElementById("roleGate")?.classList.remove("is-open");
   document.getElementById("goodsGate")?.classList.remove("is-open");
   document.getElementById("rawMaterialsGate")?.classList.remove("is-open");
   document.getElementById("rawMaterialSupplyChainIntroGate")?.classList.remove("is-open");
   document.getElementById("rawMaterialSupplyChainDiagramGate")?.classList.remove("is-open");
+  document.getElementById("rawMaterialTripFrequencyGate")?.classList.remove("is-open");
   document.getElementById("rawMaterialOriginGate")?.classList.remove("is-open");
   syncParticipantMapGateOverlay();
   layers.locations.clearLayers();
@@ -2483,6 +2604,13 @@ function setupMap() {
     if (!dr) return;
     dr.previewCursorLatLng = e.latlng;
     updateSupplyChainRoutePreview();
+    const oe = e.originalEvent;
+    const hint = document.getElementById("participantSupplyChainRouteCursorHint");
+    if (oe && hint && !readOnly) {
+      hint.classList.remove("is-hidden");
+      hint.setAttribute("aria-hidden", "false");
+      positionParticipantSupplyChainRouteCursorHint(oe.clientX, oe.clientY);
+    }
   });
 
   map.on("mouseout", () => {
@@ -2491,6 +2619,12 @@ function setupMap() {
     if (!dr) return;
     dr.previewCursorLatLng = null;
     updateSupplyChainRoutePreview();
+    const hint = document.getElementById("participantSupplyChainRouteCursorHint");
+    if (hint) {
+      hint.classList.add("is-hidden");
+      hint.style.left = "";
+      hint.style.top = "";
+    }
   });
 
   map.on("click", (e) => {
@@ -2575,45 +2709,49 @@ async function loadIBXAssets() {
 
 function setParticipantMapHintAfterIndustryGate() {
   const hintEl = document.getElementById("mapHint");
-  if (!hintEl) return;
+  try {
+    if (!hintEl) return;
 
-  if (SURVEY_MODE === "participant" && ui.rawMaterialBranchMap !== null) {
-    const idx = ui.rawMaterialBranchMap.materialIndex;
-    const name = String(state.industry.rawMaterials[idx] ?? "").trim() || "this material";
-    ui.locationType = "none";
-    hintEl.textContent = `Originating location for “${name}”: click the map to place a point, then confirm with √ or cancel with ×. You can also skip if you don't know the location.`;
+    if (SURVEY_MODE === "participant" && ui.rawMaterialBranchMap !== null) {
+      const idx = ui.rawMaterialBranchMap.materialIndex;
+      const name = String(state.industry.rawMaterials[idx] ?? "").trim() || "this material";
+      ui.locationType = "none";
+      hintEl.textContent = `Originating location for “${name}”: click the map to place a point, then confirm with √ or cancel with ×. You can also skip if you don't know the location.`;
+      syncRawMaterialOriginMapSkipVisibility();
+      return;
+    }
+
+    if (SURVEY_MODE === "participant" && ui.rawMaterialSupplyChainRouteDrawing) {
+      const dr = ui.rawMaterialSupplyChainRouteDrawing;
+      const name = String(state.industry.rawMaterials[dr.materialIndex] ?? "").trim() || "this material";
+      const d = normalizeSupplyChainDiagram(state.industry.rawMaterialBranches[dr.materialIndex]?.supplyChainDiagram);
+      const leg = d.transportLegs[dr.legIndex];
+      const modeLab = formatSupplyChainTransportModeLabel(leg);
+      const tn = dr.legIndex + 1;
+      ui.locationType = "none";
+      const startPhrase =
+        dr.legIndex === 0
+          ? "the originating location (first point is set automatically)"
+          : "the previous Transportation Mode Change (first point is set automatically)";
+      hintEl.textContent = `“${name}”: draw Transportation ${tn} (${modeLab}) on the map. The route starts from ${startPhrase}. Click to add more points along the route. Click √ next to the end label when it marks the correct stop for this leg.`;
+      syncRawMaterialOriginMapSkipVisibility();
+      return;
+    }
+
+    const hasWorkplace = state.locations.some((l) => l.locationType === "workplace");
+    if (!hasWorkplace) {
+      ui.locationType = "workplace";
+      hintEl.textContent =
+        "Workplace (your company): click the map once to mark where that company is located.";
+    } else {
+      ui.locationType = "none";
+      hintEl.textContent =
+        "Follow the questions to continue. The map will be used when a step asks you to mark a location or draw a route.";
+    }
     syncRawMaterialOriginMapSkipVisibility();
-    return;
+  } finally {
+    updateParticipantSupplyChainRouteEditingUI();
   }
-
-  if (SURVEY_MODE === "participant" && ui.rawMaterialSupplyChainRouteDrawing) {
-    const dr = ui.rawMaterialSupplyChainRouteDrawing;
-    const name = String(state.industry.rawMaterials[dr.materialIndex] ?? "").trim() || "this material";
-    const d = normalizeSupplyChainDiagram(state.industry.rawMaterialBranches[dr.materialIndex]?.supplyChainDiagram);
-    const leg = d.transportLegs[dr.legIndex];
-    const modeLab = formatSupplyChainTransportModeLabel(leg);
-    const tn = dr.legIndex + 1;
-    ui.locationType = "none";
-    const startPhrase =
-      dr.legIndex === 0
-        ? "the originating location (first point is set automatically)"
-        : "the previous Transportation Mode Change (first point is set automatically)";
-    hintEl.textContent = `“${name}”: draw Transportation ${tn} (${modeLab}) on the map. The route starts from ${startPhrase}. Click to add more points along the route. Click √ next to the end label when it marks the correct stop for this leg.`;
-    syncRawMaterialOriginMapSkipVisibility();
-    return;
-  }
-
-  const hasWorkplace = state.locations.some((l) => l.locationType === "workplace");
-  if (!hasWorkplace) {
-    ui.locationType = "workplace";
-    hintEl.textContent =
-      "Workplace (your company): click the map once to mark where that company is located.";
-  } else {
-    ui.locationType = "none";
-    hintEl.textContent =
-      "Follow the questions to continue. The map will be used when a step asks you to mark a location or draw a route.";
-  }
-  syncRawMaterialOriginMapSkipVisibility();
 }
 
 function syncParticipantMapGateOverlay() {
@@ -2627,6 +2765,7 @@ function syncParticipantMapGateOverlay() {
   const rawMatSupplyIntro = document.getElementById("rawMaterialSupplyChainIntroGate");
   const rawMatSupplyDiagram = document.getElementById("rawMaterialSupplyChainDiagramGate");
   const rawMatOrigin = document.getElementById("rawMaterialOriginGate");
+  const rawMatTripFreq = document.getElementById("rawMaterialTripFrequencyGate");
   const anyOpen = Boolean(
     ind?.classList.contains("is-open") ||
       role?.classList.contains("is-open") ||
@@ -2634,13 +2773,15 @@ function syncParticipantMapGateOverlay() {
       rawMaterials?.classList.contains("is-open") ||
       rawMatSupplyIntro?.classList.contains("is-open") ||
       rawMatSupplyDiagram?.classList.contains("is-open") ||
-      rawMatOrigin?.classList.contains("is-open")
+      rawMatOrigin?.classList.contains("is-open") ||
+      rawMatTripFreq?.classList.contains("is-open")
   );
   mapWrap.classList.toggle("map-gate-open", anyOpen);
   if (anyOpen) document.body.dataset.mapGateOpen = "1";
   else delete document.body.dataset.mapGateOpen;
   updateParticipantCompanyBanner();
   updateParticipantRawMaterialOriginBanner();
+  updateParticipantSupplyChainRouteEditingUI();
   syncRawMaterialOriginMapSkipVisibility();
 }
 
@@ -3125,6 +3266,7 @@ function participantRawMaterialBranchWorkIncomplete() {
     if (rawMaterialOriginBranchNeedsMap(b)) return true;
     if (rawMaterialSupplyChainBranchNeedsDiagramGate(b)) return true;
     if (rawMaterialSupplyChainBranchNeedsTransportRoutes(b)) return true;
+    if (rawMaterialSupplyChainBranchNeedsTripFrequencyGate(b)) return true;
   }
   return false;
 }
@@ -3135,8 +3277,10 @@ function resumeRawMaterialBranchFlow() {
       ui.rawMaterialBranchMap = null;
       ui.rawMaterialOriginEditingIndex = null;
       ui.rawMaterialSupplyChainDiagramIndex = null;
+      ui.rawMaterialTripFrequencyMaterialIndex = null;
       resetSupplyChainRouteDraft();
       document.getElementById("rawMaterialSupplyChainDiagramGate")?.classList.remove("is-open");
+      document.getElementById("rawMaterialTripFrequencyGate")?.classList.remove("is-open");
       return;
     }
     ensureRawMaterialBranchesAligned();
@@ -3168,6 +3312,10 @@ function resumeRawMaterialBranchFlow() {
         startSupplyChainTransportRouteDrawing(i);
         syncParticipantMapGateOverlay();
         setParticipantMapHintAfterIndustryGate();
+        return;
+      }
+      if (rawMaterialSupplyChainBranchNeedsTripFrequencyGate(b)) {
+        openRawMaterialTripFrequencyGate(i);
         return;
       }
     }
@@ -3378,6 +3526,12 @@ function renderSupplyChainDiagramMount(materialIndex, options = {}) {
   const nodes = d.modalChangeNodes;
   const legs = d.transportLegs;
   const matLabel = String(state.industry.rawMaterials[materialIndex] ?? "").trim() || "this material";
+  const showTripFreqLeft =
+    mountId === "participantLeftDiagramMount" &&
+    SURVEY_MODE === "participant" &&
+    br.originCategoryKey !== RAW_MATERIAL_ORIGIN_SKIPPED_KEY &&
+    isSupplyChainTransportRoutesComplete(br) &&
+    isTripFrequencyComplete(br);
   const originSummary = formatOriginLabelForSupplyChainABranch(br);
   const originIcon = originIconSrcForSupplyChain(br);
   const showRedrawButtons = mountId === "participantLeftDiagramMount" && SURVEY_MODE === "participant" && !readOnly;
@@ -3510,6 +3664,31 @@ function renderSupplyChainDiagramMount(materialIndex, options = {}) {
   parts.push(`</div>`);
   parts.push(`</div></div>`);
 
+  if (showTripFreqLeft) {
+    const n = br.tripFrequencyCount;
+    const per = normalizeTripFrequencyPeriod(br.tripFrequencyPeriod);
+    const countVal = n != null && Number.isFinite(Number(n)) ? String(Math.floor(Number(n))) : "";
+    const tfDisabled = readOnly ? " disabled" : "";
+    parts.push(`<div class="supplyChainDiagram__row supplyChainDiagram__row--tripFreq">`);
+    parts.push(`<div class="supplyChainDiagram__trackPad" aria-hidden="true"></div>`);
+    parts.push(`<div class="supplyChainDiagram__fields">`);
+    parts.push(`<div class="supplyChainDiagram__fieldLabel">Trip frequency</div>`);
+    parts.push(`<div class="supplyChainDiagram__tripFreqRow">`);
+    parts.push(
+      `<input type="number" class="goodsGate__input supplyChainDiagram__tripFreqInput" data-trip-freq="count" min="1" step="1" placeholder="N" value="${escapeHtml(countVal)}"${tfDisabled} />`
+    );
+    parts.push(`<span class="supplyChainDiagram__tripFreqMid">trip(s) per</span>`);
+    parts.push(
+      `<select class="goodsGate__input supplyChainDiagram__select" data-trip-freq="period" aria-label="Time period"${tfDisabled}>`
+    );
+    parts.push(`<option value=""${per === "" ? " selected" : ""}>—</option>`);
+    parts.push(`<option value="day"${per === "day" ? " selected" : ""}>Day</option>`);
+    parts.push(`<option value="week"${per === "week" ? " selected" : ""}>Week</option>`);
+    parts.push(`<option value="month"${per === "month" ? " selected" : ""}>Month</option>`);
+    parts.push(`</select>`);
+    parts.push(`</div></div></div>`);
+  }
+
   parts.push(`</div></div>`);
 
   mount.innerHTML = parts.join("");
@@ -3519,11 +3698,21 @@ function renderSupplyChainDiagramMount(materialIndex, options = {}) {
       ensureRawMaterialBranchesAligned();
       const row = state.industry.rawMaterialBranches[materialIndex];
       if (!row) return;
-      row.supplyChainDiagram = applySupplyChainDiagramConstraints(nextD);
-      row.supplyChainTransportRoutes = normalizeSupplyChainTransportRoutesForBranch(
-        row.supplyChainTransportRoutes,
-        row.supplyChainDiagram
-      );
+      const nextDiagram = applySupplyChainDiagramConstraints(nextD);
+      const nextRoutes = normalizeSupplyChainTransportRoutesForBranch(row.supplyChainTransportRoutes, nextDiagram);
+      const merged = { ...row, supplyChainDiagram: nextDiagram, supplyChainTransportRoutes: nextRoutes };
+      const routesOk = isSupplyChainTransportRoutesComplete(merged);
+      let tripFrequencyCount = row.tripFrequencyCount;
+      let tripFrequencyPeriod = normalizeTripFrequencyPeriod(row.tripFrequencyPeriod);
+      if (!routesOk) {
+        tripFrequencyCount = null;
+        tripFrequencyPeriod = "";
+      }
+      state.industry.rawMaterialBranches[materialIndex] = {
+        ...merged,
+        tripFrequencyCount,
+        tripFrequencyPeriod
+      };
       renderSupplyChainDiagramMount(materialIndex, options);
     };
 
@@ -3576,6 +3765,36 @@ function renderSupplyChainDiagramMount(materialIndex, options = {}) {
         participantRedrawSupplyChainRouteFromLeg(materialIndex, li);
       });
     });
+
+    const commitTripFreqFromLeft = () => {
+      if (mountId !== "participantLeftDiagramMount") return;
+      const c = mount.querySelector('[data-trip-freq="count"]');
+      const p = mount.querySelector('[data-trip-freq="period"]');
+      ensureRawMaterialBranchesAligned();
+      const row = state.industry.rawMaterialBranches[materialIndex];
+      if (!row) return;
+      const pv = normalizeTripFrequencyPeriod(p?.value);
+      const rawN = String(c?.value ?? "").trim();
+      const num = rawN === "" ? null : Number(rawN);
+      const tripFrequencyCount =
+        num != null && Number.isFinite(num) && num >= 1 && Math.floor(num) === num ? Math.floor(num) : null;
+      const tripFrequencyPeriod = tripFrequencyCount != null ? pv : "";
+      state.industry.rawMaterialBranches[materialIndex] = {
+        ...row,
+        tripFrequencyCount,
+        tripFrequencyPeriod
+      };
+      void flushSaveToServer();
+      rebuildFromState();
+      uiUpdateStats();
+      ensureRawMaterialBranchesAligned();
+      const rowAfter = state.industry.rawMaterialBranches[materialIndex];
+      if (rowAfter && rawMaterialSupplyChainBranchNeedsTripFrequencyGate(rowAfter)) {
+        openRawMaterialTripFrequencyGate(materialIndex);
+      }
+    };
+    mount.querySelector('[data-trip-freq="count"]')?.addEventListener("change", commitTripFreqFromLeft);
+    mount.querySelector('[data-trip-freq="period"]')?.addEventListener("change", commitTripFreqFromLeft);
   }
 
   bindSupplyChainDiagramTrackLayout(mount);
@@ -3728,6 +3947,8 @@ function openRawMaterialSupplyChainDiagramGate(materialIndex) {
   if (!gate) return;
   document.getElementById("rawMaterialSupplyChainIntroGate")?.classList.remove("is-open");
   document.getElementById("rawMaterialOriginGate")?.classList.remove("is-open");
+  document.getElementById("rawMaterialTripFrequencyGate")?.classList.remove("is-open");
+  ui.rawMaterialTripFrequencyMaterialIndex = null;
   ui.rawMaterialBranchMap = null;
   ui.rawMaterialOriginEditingIndex = null;
   ui.rawMaterialSupplyChainIntroIndex = null;
@@ -3758,12 +3979,52 @@ function openRawMaterialSupplyChainDiagramGate(materialIndex) {
   });
 }
 
+function openRawMaterialTripFrequencyGate(materialIndex) {
+  const gate = document.getElementById("rawMaterialTripFrequencyGate");
+  if (!gate) return;
+  document.getElementById("rawMaterialSupplyChainIntroGate")?.classList.remove("is-open");
+  document.getElementById("rawMaterialOriginGate")?.classList.remove("is-open");
+  document.getElementById("rawMaterialSupplyChainDiagramGate")?.classList.remove("is-open");
+  ui.rawMaterialBranchMap = null;
+  ui.rawMaterialOriginEditingIndex = null;
+  ui.rawMaterialSupplyChainIntroIndex = null;
+  ui.rawMaterialSupplyChainDiagramIndex = null;
+  resetSupplyChainRouteDraft();
+  ensureRawMaterialBranchesAligned();
+  const br = state.industry.rawMaterialBranches[materialIndex];
+  if (!br || !rawMaterialSupplyChainBranchNeedsTripFrequencyGate(br)) return;
+  ui.rawMaterialTripFrequencyMaterialIndex = materialIndex;
+  const matName = String(state.industry.rawMaterials[materialIndex] ?? "").trim() || "this material";
+  const titleEl = document.getElementById("rawMaterialTripFrequencyGateTitle");
+  if (titleEl) {
+    titleEl.textContent = `What is the frequency of this trip for ${matName}?`;
+  }
+  const countInput = document.getElementById("rawMaterialTripFrequencyCount");
+  const periodSel = document.getElementById("rawMaterialTripFrequencyPeriod");
+  const n = br.tripFrequencyCount;
+  if (countInput) {
+    countInput.value = n != null && Number.isFinite(Number(n)) ? String(Math.floor(Number(n))) : "";
+  }
+  if (periodSel) {
+    periodSel.value = normalizeTripFrequencyPeriod(br.tripFrequencyPeriod);
+  }
+  if (SURVEY_MODE === "participant") {
+    ui.participantSelectedRawMaterialIndex = materialIndex;
+  }
+  gate.classList.add("is-open");
+  syncParticipantMapGateOverlay();
+  syncParticipantLeftPanel();
+  requestAnimationFrame(() => document.getElementById("rawMaterialTripFrequencyCount")?.focus());
+}
+
 function openRawMaterialSupplyChainIntroGate(materialIndex) {
   const gate = document.getElementById("rawMaterialSupplyChainIntroGate");
   const titleEl = document.getElementById("rawMaterialSupplyChainIntroTitle");
   if (!gate) return;
   document.getElementById("rawMaterialSupplyChainDiagramGate")?.classList.remove("is-open");
   document.getElementById("rawMaterialOriginGate")?.classList.remove("is-open");
+  document.getElementById("rawMaterialTripFrequencyGate")?.classList.remove("is-open");
+  ui.rawMaterialTripFrequencyMaterialIndex = null;
   ui.rawMaterialSupplyChainDiagramIndex = null;
   ui.rawMaterialBranchMap = null;
   ui.rawMaterialOriginEditingIndex = null;
@@ -3783,6 +4044,8 @@ function openRawMaterialOriginQuestionGate(materialIndex) {
   if (!gate) return;
   document.getElementById("rawMaterialSupplyChainIntroGate")?.classList.remove("is-open");
   document.getElementById("rawMaterialSupplyChainDiagramGate")?.classList.remove("is-open");
+  document.getElementById("rawMaterialTripFrequencyGate")?.classList.remove("is-open");
+  ui.rawMaterialTripFrequencyMaterialIndex = null;
   ui.rawMaterialSupplyChainIntroIndex = null;
   ui.rawMaterialSupplyChainDiagramIndex = null;
   const matName = String(state.industry.rawMaterials[materialIndex] ?? "").trim() || "this material";
@@ -3892,7 +4155,7 @@ function initParticipantRawMaterialSupplyChainDiagramOnce() {
     }
     ensureRawMaterialBranchesAligned();
     const prevRow = state.industry.rawMaterialBranches[idx];
-    state.industry.rawMaterialBranches[idx] = {
+    let mergedRow = {
       ...prevRow,
       supplyChainDiagram: collected,
       supplyChainTransportRoutes: normalizeSupplyChainTransportRoutesForBranch(
@@ -3900,6 +4163,14 @@ function initParticipantRawMaterialSupplyChainDiagramOnce() {
         collected
       )
     };
+    if (!isSupplyChainTransportRoutesComplete(mergedRow)) {
+      mergedRow = {
+        ...mergedRow,
+        tripFrequencyCount: null,
+        tripFrequencyPeriod: ""
+      };
+    }
+    state.industry.rawMaterialBranches[idx] = mergedRow;
     gate?.classList.remove("is-open");
     ui.rawMaterialSupplyChainDiagramIndex = null;
     void flushSaveToServer();
@@ -3920,6 +4191,56 @@ function initParticipantRawMaterialSupplyChainDiagramOnce() {
 
   modalBtn?.addEventListener("click", commitSupplyChainDiagramSave);
   leftBtn?.addEventListener("click", commitSupplyChainDiagramSave);
+}
+
+function initParticipantRawMaterialTripFrequencyOnce() {
+  if (SURVEY_MODE !== "participant" || document.body.dataset.participantRawMaterialTripFreqBound === "1") {
+    return;
+  }
+  const gate = document.getElementById("rawMaterialTripFrequencyGate");
+  const btn = document.getElementById("rawMaterialTripFrequencyContinueBtn");
+  const countInput = document.getElementById("rawMaterialTripFrequencyCount");
+  if (!gate || !btn) return;
+  document.body.dataset.participantRawMaterialTripFreqBound = "1";
+  btn.addEventListener("click", () => {
+    const idx = ui.rawMaterialTripFrequencyMaterialIndex;
+    if (idx == null || idx < 0) return;
+    const n = Number(document.getElementById("rawMaterialTripFrequencyCount")?.value ?? "");
+    const per = normalizeTripFrequencyPeriod(document.getElementById("rawMaterialTripFrequencyPeriod")?.value);
+    if (!Number.isFinite(n) || n < 1 || Math.floor(n) !== n) {
+      window.alert("Please enter a whole number of trips (at least 1).");
+      return;
+    }
+    if (!per) {
+      window.alert("Please choose Day, Week, or Month.");
+      return;
+    }
+    ensureRawMaterialBranchesAligned();
+    const prev = state.industry.rawMaterialBranches[idx];
+    state.industry.rawMaterialBranches[idx] = {
+      ...prev,
+      tripFrequencyCount: Math.floor(n),
+      tripFrequencyPeriod: per
+    };
+    gate.classList.remove("is-open");
+    ui.rawMaterialTripFrequencyMaterialIndex = null;
+    void flushSaveToServer();
+    rebuildFromState();
+    uiUpdateStats();
+    syncParticipantMapGateOverlay();
+    resumeRawMaterialBranchFlow();
+    if (!participantRawMaterialBranchWorkIncomplete()) {
+      setParticipantMapHintAfterIndustryGate();
+      void flushSaveToServer();
+    }
+    if (map) {
+      requestAnimationFrame(() => map.invalidateSize());
+      setTimeout(() => map.invalidateSize(), 200);
+    }
+  });
+  countInput?.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") btn.click();
+  });
 }
 
 function initParticipantRawMaterialSupplyChainIntroOnce() {
@@ -4061,6 +4382,7 @@ async function finishParticipantBoot() {
   initParticipantLeftPanelOnce();
   initParticipantRawMaterialSupplyChainIntroOnce();
   initParticipantRawMaterialSupplyChainDiagramOnce();
+  initParticipantRawMaterialTripFrequencyOnce();
   initParticipantRawMaterialOriginGateOnce();
   initParticipantRawMaterialOriginMapSkipOnce();
 

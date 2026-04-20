@@ -162,6 +162,33 @@
           ></div>
 
           <div
+            id="participantSupplyChainRouteBanner"
+            class="supplyChainRouteEditBanner is-hidden"
+            aria-hidden="true"
+            role="status"
+          >
+            <div class="supplyChainRouteEditBanner__inner">
+              <span class="supplyChainRouteEditBanner__title">Currently Editing:</span>
+              <div class="supplyChainRouteEditBanner__diagram">
+                <span class="supplyChainRouteEditBanner__node" data-sc-route-banner-from>A</span>
+                <span class="supplyChainRouteEditBanner__leg">
+                  <span class="supplyChainRouteEditBanner__mode" data-sc-route-banner-mode>—</span>
+                  <span class="supplyChainRouteEditBanner__arrowLine" aria-hidden="true"></span>
+                </span>
+                <span class="supplyChainRouteEditBanner__node" data-sc-route-banner-to>B</span>
+              </div>
+            </div>
+          </div>
+
+          <div
+            id="participantSupplyChainRouteCursorHint"
+            class="supplyChainRouteCursorHint is-hidden"
+            aria-hidden="true"
+          >
+            Please Mark the Route
+          </div>
+
+          <div
             id="industryGate"
             class="industryGate industryGate--floating"
             role="dialog"
@@ -361,6 +388,46 @@
                 <button type="button" class="primaryBtn" id="rawMaterialSupplyChainDiagramSaveBtn">
                   Confirm &amp; Save
                 </button>
+              </div>
+            </div>
+          </div>
+
+          <div
+            id="rawMaterialTripFrequencyGate"
+            class="rawMaterialTripFrequencyGate rawMaterialTripFrequencyGate--floating"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="rawMaterialTripFrequencyGateTitle"
+          >
+            <div class="participantGate__card rawMaterialTripFrequencyGate__card">
+              <h2 class="rawMaterialTripFrequencyGate__title" id="rawMaterialTripFrequencyGateTitle">
+                What is the frequency of this trip?
+              </h2>
+              <p class="participantGate__p rawMaterialTripFrequencyGate__intro">
+                Enter how many full trips occur in each period.
+              </p>
+              <div class="rawMaterialTripFrequencyGate__row">
+                <label class="goodsGate__label" for="rawMaterialTripFrequencyCount">Trips</label>
+                <div class="rawMaterialTripFrequencyGate__inputs">
+                  <input
+                    type="number"
+                    id="rawMaterialTripFrequencyCount"
+                    class="goodsGate__input rawMaterialTripFrequencyGate__count"
+                    min="1"
+                    step="1"
+                    placeholder="N"
+                  />
+                  <span class="rawMaterialTripFrequencyGate__mid" aria-hidden="true">trip(s) per</span>
+                  <select id="rawMaterialTripFrequencyPeriod" class="goodsGate__input rawMaterialTripFrequencyGate__period" aria-label="Day, week, or month">
+                    <option value="">—</option>
+                    <option value="day">Day</option>
+                    <option value="week">Week</option>
+                    <option value="month">Month</option>
+                  </select>
+                </div>
+              </div>
+              <div class="participantGate__actions">
+                <button type="button" class="primaryBtn" id="rawMaterialTripFrequencyContinueBtn">Continue</button>
               </div>
             </div>
           </div>
