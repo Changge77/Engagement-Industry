@@ -32,6 +32,12 @@ body {
   flex-direction: column;
 }
 
+/* Participant survey: main fills space below topbar so the left column can scroll within the viewport */
+body[data-survey-mode="participant"] #app > main.layout {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
 .topbar {
   display: flex;
   align-items: center;
@@ -46,6 +52,151 @@ body {
 .topbar__title {
   font-weight: 700;
   letter-spacing: 0.2px;
+}
+
+.topbar__meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Participant left panel: flex column — profile stays visible, lower block scrolls */
+body[data-survey-mode="participant"] .layout > aside.panel {
+  display: flex;
+  flex-direction: column;
+  align-self: stretch;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+body[data-survey-mode="participant"] .participantProfileCard {
+  flex-shrink: 0;
+}
+
+/* Scrollable region: raw materials + supply chain (fills space below profile card) */
+.participantAsideContent {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-right: 4px;
+}
+
+/* Participant: company / role / products summary above raw materials */
+.participantProfileCard {
+  margin-bottom: 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.participantProfileRow {
+  margin-bottom: 12px;
+}
+
+.participantProfileRow:last-child {
+  margin-bottom: 0;
+}
+
+.participantProfileRow__label {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0 0 6px 0;
+}
+
+.participantProfileProductsHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.participantProfileHeaderActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.participantProfileRow__label--inline {
+  margin-bottom: 0;
+}
+
+.participantProfileProductsEditBtn {
+  flex-shrink: 0;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.participantProfileProductList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.participantProfileProductList__item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: rgba(241, 245, 249, 0.95);
+  border: 1px solid var(--border);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.participantProfileProductList__item--other {
+  background: rgba(30, 41, 59, 0.06);
+}
+
+.participantProfileProductList__item--textOnly .participantProfileProductList__label {
+  flex: 1 1 auto;
+  width: 100%;
+}
+
+.participantProfileProductList__icon {
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  object-fit: contain;
+}
+
+.participantProfileProductList__iconFallback {
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  background: #1e293b;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.participantProfileProductList__label {
+  flex: 1;
+  min-width: 0;
+  line-height: 1.35;
+}
+
+.participantProfileProductsEmpty {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--muted);
 }
 
 .pill {
@@ -665,6 +816,116 @@ html.participant-welcome-ok #welcomeGate {
   margin-top: 4px;
 }
 
+/* Participant Step 1: raw materials + products + detail (supply chain diagram) */
+.participantLeftEmpty {
+  min-height: 120px;
+}
+
+.participantLeftShell {
+  margin-bottom: 12px;
+}
+
+.participantLeftSection {
+  margin-bottom: 14px;
+}
+
+.participantLeftSection__h {
+  margin: 0 0 8px 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.participantPillRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.participantPillRow--products .participantPill--muted {
+  font-style: italic;
+  color: var(--muted);
+}
+
+.participantPill {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(45, 212, 191, 0.45);
+  background: rgba(204, 251, 241, 0.65);
+  color: #0f172a;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.participantPill:hover {
+  filter: brightness(0.98);
+}
+
+.participantPill.is-active {
+  background: #1e293b;
+  border-color: #1e293b;
+  color: #fff;
+}
+
+.participantLeftDetail {
+  margin-top: 4px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.participantLeftDetail__h {
+  margin: 0 0 8px 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.participantLeftDetail__label {
+  font-weight: 700;
+  margin-right: 6px;
+}
+
+.participantLeftDetail__name {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 8px;
+  background: rgba(51, 65, 85, 0.12);
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.participantLeftDetailPlaceholder {
+  margin: 0 0 10px 0;
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.35;
+}
+
+.participantDiagramSaveRow {
+  margin-top: 10px;
+}
+
+/* Diagram scrolls with the left column (see .participantAsideContent); avoid nested short viewport */
+.supplyChainDiagramMount--left {
+  margin-top: 4px;
+  max-height: none;
+  overflow-x: hidden;
+  overflow-y: visible;
+  padding-right: 2px;
+}
+
+.supplyChainDiagramMount--sidebarReadonly .supplyChainDiagram__select:disabled,
+.supplyChainDiagramMount--sidebarReadonly .goodsGate__input[readonly] {
+  background: rgba(248, 250, 252, 0.95);
+  color: var(--text);
+  cursor: default;
+}
+
 .supplyChainDiagram__flow {
   position: relative;
   margin: 0;
@@ -736,6 +997,29 @@ html.participant-welcome-ok #welcomeGate {
   font-weight: 700;
   color: var(--muted);
   margin-bottom: 4px;
+}
+
+.supplyChainDiagram__transportLabelBar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.supplyChainDiagram__fieldLabel--bar {
+  margin-bottom: 0;
+  flex: 1;
+  min-width: 0;
+}
+
+.supplyChainDiagram__redrawRouteBtn {
+  flex-shrink: 0;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
 }
 
 .supplyChainDiagram__select {

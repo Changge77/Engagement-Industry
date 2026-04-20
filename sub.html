@@ -51,288 +51,99 @@
     <div id="app">
       <header class="topbar">
         <div class="topbar__title">NYC Supply Chain Survey</div>
-        <div class="topbar__meta">
-          <span class="pill" id="activeStepPill">Step 1: Locations</span>
-        </div>
       </header>
 
       <main class="layout">
         <aside class="panel">
-          <nav class="tabs">
-            <button class="tab is-active" data-step="locations" type="button">
-              1. Locations
-            </button>
-            <button class="tab" data-step="currentRoutes" type="button">
-              2. Current Distribution
-            </button>
-            <button class="tab" data-step="ibxRoutes" type="button">
-              3. IBX Assumption
-            </button>
-            <button class="tab" data-step="export" type="button">
-              4. Export
-            </button>
-          </nav>
-
-          <section class="step" data-step-panel="locations">
-            <h2 class="panel__h2">Mark optional locations</h2>
-            <p class="panel__hint participantIndustrySummary is-hidden" id="participantIndustrySummary"></p>
-            <p class="panel__hint">
-              Choose a location type, then click the map to add a point. Start with your workplace, then add other
-              sites if you like.
-            </p>
-
-            <div class="buttonRow">
-              <button
-                class="modeBtn"
-                data-location-type="workplace"
-                type="button"
-              >
-                Workplace (your company)
-              </button>
-              <button
-                class="modeBtn"
-                data-location-type="import"
-                type="button"
-              >
-                <img src="Icons/Locations/Port.svg" class="modeBtn__icon" alt="" aria-hidden="true" />
-                Import location
-              </button>
-              <button
-                class="modeBtn"
-                data-location-type="export"
-                type="button"
-              >
-                <img src="Icons/Locations/Airport.svg" class="modeBtn__icon" alt="" aria-hidden="true" />
-                Export location
-              </button>
-              <button
-                class="modeBtn"
-                data-location-type="manufacturing"
-                type="button"
-              >
-                <img src="Icons/Locations/Manufactoring.svg" class="modeBtn__icon" alt="" aria-hidden="true" />
-                Manufacturing
-              </button>
-              <button
-                class="modeBtn"
-                data-location-type="warehouse"
-                type="button"
-              >
-                <img src="Icons/Locations/Storage.svg" class="modeBtn__icon" alt="" aria-hidden="true" />
-                Warehouse
-              </button>
-              <button
-                class="modeBtn"
-                data-location-type="subdistribution"
-                type="button"
-              >
-                <img src="Icons/Locations/Distribution.svg" class="modeBtn__icon" alt="" aria-hidden="true" />
-                Subdistribution
-              </button>
-              <button
-                class="modeBtn"
-                data-location-type="other"
-                type="button"
-              >
-                Other
-              </button>
-              <button
-                class="modeBtn is-muted"
-                data-location-type="none"
-                type="button"
-              >
-                No placement
-              </button>
-            </div>
-
-            <div class="panelActions">
-              <button class="ghostBtn" id="clearLocations" type="button">
-                Clear locations
-              </button>
-              <div class="miniStat">
-                <div class="miniStat__label">Locations added</div>
-                <div class="miniStat__value" id="locationsCount">0</div>
+          <div id="participantProfileCard" class="participantProfileCard is-hidden" aria-label="Your profile answers">
+            <div class="participantProfileRow participantProfileRow--products">
+              <div class="participantProfileProductsHeader">
+                <span class="participantProfileRow__label participantProfileRow__label--inline">Company</span>
+                <div class="participantProfileHeaderActions">
+                  <button
+                    type="button"
+                    class="ghostBtn participantProfileProductsEditBtn"
+                    id="participantProfileCompanyBtn"
+                    aria-label="Edit company or industry"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    type="button"
+                    class="ghostBtn participantProfileProductsEditBtn participantProfileRedrawLocBtn"
+                    id="participantProfileRedrawWorkplaceBtn"
+                    aria-label="Redraw company location on the map"
+                  >
+                    Redraw Location
+                  </button>
+                </div>
               </div>
+              <ul id="participantProfileCompanyList" class="participantProfileProductList is-hidden" aria-label="Company name"></ul>
+              <p id="participantProfileCompanyEmpty" class="participantProfileProductsEmpty">—</p>
             </div>
-          </section>
-
-          <section class="step is-hidden" data-step-panel="currentRoutes">
-            <h2 class="panel__h2">Draw current distribution routes</h2>
-            <p class="panel__hint">
-              Draw one route segment at a time. Each time you switch the
-              transport mode, we treat it as a transfer and apply the transfer
-              costs provided in your specification.
-            </p>
-
-            <div class="buttonRow">
-              <button class="modeBtn" data-route-mode="huge" type="button">
-                Huge Truck
-              </button>
-              <button class="modeBtn" data-route-mode="small" type="button">
-                Small Truck
-              </button>
-              <button class="modeBtn" data-route-mode="train" type="button">
-                Train
-              </button>
-            </div>
-
-            <div class="routeControls">
-              <button class="primaryBtn" id="startSegmentCurrent" type="button">
-                Start segment
-              </button>
-              <button
-                class="ghostBtn"
-                id="finishSegmentCurrent"
-                type="button"
-                disabled
-              >
-                Finish segment
-              </button>
-              <button
-                class="ghostBtn"
-                id="undoPointCurrent"
-                type="button"
-                disabled
-              >
-                Undo last point
-              </button>
-              <button
-                class="ghostBtn"
-                id="cancelSegmentCurrent"
-                type="button"
-                disabled
-              >
-                Cancel
-              </button>
-            </div>
-
-            <div class="panelActions">
-              <button class="ghostBtn" id="clearCurrentRoutes" type="button">
-                Clear current routes
-              </button>
-              <div class="miniStat">
-                <div class="miniStat__label">Current total cost</div>
-                <div class="miniStat__value" id="currentTotalGold">0</div>
-              </div>
-            </div>
-
-            <div class="panel__note">
-              Transfer cost matrix is applied for the directions you provided.
-              If you need the reverse directions too, tell me and I’ll update
-              the table in the code.
-            </div>
-          </section>
-
-          <section class="step is-hidden" data-step-panel="ibxRoutes">
-            <h2 class="panel__h2">Draw IBX assumption routes</h2>
-            <p class="panel__hint">
-              IBX railway line will be highlighted. Draw segments similarly to
-              the current routes. Use “IBX Rail” when your route relies on the
-              IBX railway.
-            </p>
-
-            <div class="buttonRow">
-              <button class="modeBtn" data-route-mode="huge_ibx" type="button">
-                Huge Truck
-              </button>
-              <button class="modeBtn" data-route-mode="small_ibx" type="button">
-                Small Truck
-              </button>
-              <button class="modeBtn" data-route-mode="ibx" type="button">
-                IBX Rail
-              </button>
-            </div>
-
-            <div class="routeControls">
-              <button class="primaryBtn" id="startSegmentIbX" type="button">
-                Start segment
-              </button>
-              <button
-                class="ghostBtn"
-                id="finishSegmentIbX"
-                type="button"
-                disabled
-              >
-                Finish segment
-              </button>
-              <button
-                class="ghostBtn"
-                id="undoPointIbX"
-                type="button"
-                disabled
-              >
-                Undo last point
-              </button>
-              <button
-                class="ghostBtn"
-                id="cancelSegmentIbX"
-                type="button"
-                disabled
-              >
-                Cancel
-              </button>
-            </div>
-
-            <div class="panelActions">
-              <button class="ghostBtn" id="clearIbxRoutes" type="button">
-                Clear IBX routes
-              </button>
-              <div class="miniStat">
-                <div class="miniStat__label">IBX total cost</div>
-                <div class="miniStat__value" id="ibxTotalGold">0</div>
-              </div>
-            </div>
-
-            <div class="panel__note">
-              The IBX railway line and stations are loaded automatically from
-              <code>IBX_Line_4326.geojson</code> and <code>IBX_Stations.geojson</code>.
-              If the files fail to load (for example, when using <code>file://</code>), a
-              placeholder is shown.
-            </div>
-          </section>
-
-          <section class="step is-hidden" data-step-panel="export">
-            <h2 class="panel__h2">Export your survey data</h2>
-            <p class="panel__hint">
-              Download a CSV for all collected data, and download route geometry
-              as GeoJSON exported in EPSG:2263.
-            </p>
-
-            <div class="panelActions">
-              <button class="primaryBtn" id="exportCSV" type="button">
-                Download CSV (all data)
-              </button>
-              <button class="primaryBtn" id="exportRoutesGeoJSON" type="button">
-                Download Routes GeoJSON (EPSG:2263)
-              </button>
-            </div>
-
-            <div class="exportSummary">
-              <div class="exportSummary__item">
-                <span class="exportSummary__label">Locations</span>
-                <span class="exportSummary__value" id="exportLocationsCount"
-                  >0</span
+            <div class="participantProfileRow participantProfileRow--products">
+              <div class="participantProfileProductsHeader">
+                <span class="participantProfileRow__label participantProfileRow__label--inline">Job &amp; Role</span>
+                <button
+                  type="button"
+                  class="ghostBtn participantProfileProductsEditBtn"
+                  id="participantProfileRoleBtn"
+                  aria-label="Edit job and role"
                 >
+                  Edit
+                </button>
               </div>
-              <div class="exportSummary__item">
-                <span class="exportSummary__label">Current segments</span>
-                <span class="exportSummary__value" id="exportCurrentSegments"
-                  >0</span
+              <ul id="participantProfileRoleList" class="participantProfileProductList is-hidden" aria-label="Job and role"></ul>
+              <p id="participantProfileRoleEmpty" class="participantProfileProductsEmpty">—</p>
+            </div>
+            <div class="participantProfileRow participantProfileRow--products">
+              <div class="participantProfileProductsHeader">
+                <span class="participantProfileRow__label participantProfileRow__label--inline">Type of Products</span>
+                <button
+                  type="button"
+                  class="ghostBtn participantProfileProductsEditBtn"
+                  id="participantProfileProductsBtn"
+                  aria-label="Edit type of products"
                 >
+                  Edit
+                </button>
               </div>
-              <div class="exportSummary__item">
-                <span class="exportSummary__label">IBX segments</span>
-                <span class="exportSummary__value" id="exportIbXSegments">0</span>
-              </div>
+              <ul id="participantProfileProductsList" class="participantProfileProductList is-hidden" aria-label="Selected product types"></ul>
+              <p id="participantProfileProductsEmpty" class="participantProfileProductsEmpty">—</p>
             </div>
+          </div>
+          <div class="participantAsideContent">
+            <div id="participantLeftEmpty" class="participantLeftEmpty" aria-hidden="true"></div>
 
-            <div class="panel__note">
-              GeoJSON uses the deprecated `crs` member to declare EPSG:2263,
-              because the standard does not require a CRS for consumer software.
-              If you want a different CRS packaging approach, tell me what tool
-              you’ll use to import the file.
+            <div id="participantLeftShell" class="participantLeftShell is-hidden">
+              <div class="participantLeftSection">
+                <h3 class="participantLeftSection__h">Raw Materials</h3>
+                <div id="participantRawMaterialPills" class="participantPillRow" role="tablist" aria-label="Raw materials"></div>
+              </div>
+              <div class="participantLeftSection">
+                <h3 class="participantLeftSection__h">Products</h3>
+                <div class="participantPillRow participantPillRow--products">
+                  <span class="participantPill participantPill--muted">(Questions coming soon)</span>
+                </div>
+              </div>
+              <div id="participantLeftDetail" class="participantLeftDetail is-hidden">
+                <h3 class="participantLeftDetail__h">
+                  <span class="participantLeftDetail__label">Detail:</span>
+                  <span id="participantLeftDetailName" class="participantLeftDetail__name"></span>
+                </h3>
+                <p id="participantLeftDetailPlaceholder" class="participantLeftDetailPlaceholder is-hidden"></p>
+                <div
+                  id="participantLeftDiagramMount"
+                  class="supplyChainDiagramMount supplyChainDiagramMount--left"
+                ></div>
+                <div id="participantDiagramSaveRow" class="participantDiagramSaveRow is-hidden">
+                  <button type="button" class="primaryBtn" id="participantLeftDiagramSaveBtn">
+                    Confirm &amp; Save
+                  </button>
+                </div>
+              </div>
             </div>
-          </section>
+          </div>
         </aside>
 
         <section class="mapWrap">
@@ -630,8 +441,7 @@
             </button>
           </div>
           <div class="mapHint" id="mapHint">
-            Select a tool on the left, then click the map to add points or draw
-            segments.
+            Follow the questions. The map is used when a step asks you to mark a location or draw a route.
           </div>
         </section>
       </main>

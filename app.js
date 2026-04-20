@@ -75,6 +75,64 @@ const GOODS_CATEGORY_OPTIONS = [
 ];
 const GOODS_CATEGORY_KEYS = new Set(GOODS_CATEGORY_OPTIONS.map((o) => o.key));
 
+/** Icon paths for participant profile list (match sub.html goodsGate). */
+const GOODS_CATEGORY_ICON_SRC = {
+  recyclables: "Icons/Products/Recyclables.svg",
+  food: "Icons/Products/Food.svg",
+  construction: "Icons/Products/COnstruction_materials.svg",
+  automotive: "Icons/Products/Auto_parts.svg",
+  light_fabrication: "Icons/Products/Light_fabrication.svg",
+  high_tech: "Icons/Products/Tech.svg"
+};
+
+function participantGoodsProfileListInnerHtml(industry) {
+  const ind = industry ?? state.industry;
+  const keys = ind?.goodsCategoryKeys;
+  if (!Array.isArray(keys) || keys.length === 0) return "";
+  const parts = [];
+  for (const k of keys) {
+    if (!GOODS_CATEGORY_KEYS.has(k)) continue;
+    let label = "";
+    if (k === "other") {
+      const d = String(ind.goodsOtherDetail ?? "").trim();
+      label = d ? `Others (${d})` : "Others";
+    } else {
+      label = GOODS_CATEGORY_OPTIONS.find((o) => o.key === k)?.label ?? k;
+    }
+    const iconSrc = GOODS_CATEGORY_ICON_SRC[k];
+    if (iconSrc) {
+      parts.push(
+        `<li class="participantProfileProductList__item"><img class="participantProfileProductList__icon" src="${escapeHtml(
+          iconSrc
+        )}" alt="" aria-hidden="true"/><span class="participantProfileProductList__label">${escapeHtml(label)}</span></li>`
+      );
+    } else {
+      parts.push(
+        `<li class="participantProfileProductList__item participantProfileProductList__item--other"><span class="participantProfileProductList__iconFallback" aria-hidden="true">…</span><span class="participantProfileProductList__label">${escapeHtml(
+          label
+        )}</span></li>`
+      );
+    }
+  }
+  return parts.join("");
+}
+
+function participantCompanyProfileListInnerHtml() {
+  const company = String(state.industry?.companyName ?? "").trim();
+  if (!company) return "";
+  return `<li class="participantProfileProductList__item participantProfileProductList__item--textOnly"><span class="participantProfileProductList__label">${escapeHtml(
+    company
+  )}</span></li>`;
+}
+
+function participantRoleProfileListInnerHtml() {
+  const roleText = formatParticipantRoleSummary(state.industry);
+  if (!roleText) return "";
+  return `<li class="participantProfileProductList__item participantProfileProductList__item--textOnly"><span class="participantProfileProductList__label">${escapeHtml(
+    roleText
+  )}</span></li>`;
+}
+
 /** Per raw material: first branch — where it originates (keys match sub.html radios). */
 const RAW_MATERIAL_ORIGIN_OPTIONS = [
   { key: "storage_facility", label: "Storage Facility" },
@@ -479,6 +537,41 @@ function getSupplyChainRouteStartLatLng(branch, legIndex) {
   return epsg2263XYToLatLng(last[0], last[1]);
 }
 
+/** Clear map geometry for transportation leg `fromLegIndex` and all following legs; earlier legs unchanged. */
+function clearSupplyChainTransportRoutesFromLeg(materialIndex, fromLegIndex) {
+  ensureRawMaterialBranchesAligned();
+  const row = state.industry.rawMaterialBranches[materialIndex];
+  if (!row) return;
+  const d = normalizeSupplyChainDiagram(row.supplyChainDiagram);
+  const n = d.transportLegs.length;
+  if (fromLegIndex < 0 || fromLegIndex >= n) return;
+  const routes = normalizeSupplyChainTransportRoutesForBranch(row.supplyChainTransportRoutes, row.supplyChainDiagram);
+  for (let i = fromLegIndex; i < n; i++) {
+    routes[i] = { points: [] };
+  }
+  state.industry.rawMaterialBranches[materialIndex] = {
+    ...row,
+    supplyChainTransportRoutes: routes
+  };
+}
+
+function canRedrawSupplyChainTransportLeg(branch, legIndex) {
+  return getSupplyChainRouteStartLatLng(branch, legIndex) != null;
+}
+
+/** Participant left panel: erase this leg and later routes, then start drawing this leg on the map. */
+function participantRedrawSupplyChainRouteFromLeg(materialIndex, legIndex) {
+  if (readOnly || SURVEY_MODE !== "participant") return;
+  clearPendingLocation();
+  clearSupplyChainTransportRoutesFromLeg(materialIndex, legIndex);
+  void flushSaveToServer();
+  rebuildFromState();
+  uiUpdateStats();
+  setParticipantMapHintAfterIndustryGate();
+  syncParticipantMapGateOverlay();
+  startSupplyChainTransportRouteLeg(materialIndex, legIndex);
+}
+
 function removeSupplyChainRoutePreviewPolyline() {
   if (supplyChainRoutePreviewPolyline) {
     try {
@@ -512,6 +605,7 @@ function resetSupplyChainRouteDraft() {
   removeSupplyChainRoutePreviewPolyline();
   if (layers?.supplyChainDraft) layers.supplyChainDraft.clearLayers();
   ui.rawMaterialSupplyChainRouteDrawing = null;
+  syncParticipantLeftPanel();
 }
 
 function supplyChainRouteConfirmLabel(d, legIndex) {
@@ -656,6 +750,7 @@ function startSupplyChainTransportRouteLeg(materialIndex, legIndex) {
   refreshSupplyChainRouteDraftVisuals();
   setParticipantMapHintAfterIndustryGate();
   syncParticipantMapGateOverlay();
+  syncParticipantLeftPanel();
   if (map) {
     requestAnimationFrame(() => map.invalidateSize());
   }
@@ -924,7 +1019,9 @@ const ui = {
   /** Participant: material index while editing the supply-chain diagram (second branch). */
   rawMaterialSupplyChainDiagramIndex: null,
   /** Participant: drawing supply-chain transportation routes on the map (after diagram is saved). */
-  rawMaterialSupplyChainRouteDrawing: null
+  rawMaterialSupplyChainRouteDrawing: null,
+  /** Participant: which raw material is selected in the left panel (diagram detail). */
+  participantSelectedRawMaterialIndex: null
 };
 
 const state = {
@@ -1368,6 +1465,8 @@ function rebuildFromState() {
     refreshSupplyChainRouteDraftVisuals();
   }
 
+  syncParticipantLeftPanel();
+
   uiUpdateStats();
 }
 
@@ -1383,29 +1482,59 @@ function uiUpdateStats() {
   set("exportCurrentSegments", String(state.routes.current.segments.length));
   set("exportIbXSegments", String(state.routes.ibx.segments.length));
 
-  const indEl = document.getElementById("participantIndustrySummary");
-  if (indEl) {
-    const company = String(state.industry?.companyName ?? "").trim();
-    const rk = String(state.industry?.roleKey ?? "").trim();
-    let roleText = "";
-    if (rk === "manager") roleText = "Manager";
-    else if (rk === "worker") roleText = "Worker";
-    else if (rk === "transporter") roleText = "Transporter";
-    else if (rk === "other") {
-      const d = String(state.industry?.roleOtherDetail ?? "").trim();
-      roleText = d ? `Others (${d})` : "Others";
+  if (SURVEY_MODE === "participant") {
+    const profileCard = document.getElementById("participantProfileCard");
+    const companyList = document.getElementById("participantProfileCompanyList");
+    const companyEmpty = document.getElementById("participantProfileCompanyEmpty");
+    const roleList = document.getElementById("participantProfileRoleList");
+    const roleEmpty = document.getElementById("participantProfileRoleEmpty");
+    const productsList = document.getElementById("participantProfileProductsList");
+    const productsEmpty = document.getElementById("participantProfileProductsEmpty");
+    if (
+      profileCard &&
+      companyList &&
+      companyEmpty &&
+      roleList &&
+      roleEmpty &&
+      productsList &&
+      productsEmpty
+    ) {
+      const company = String(state.industry?.companyName ?? "").trim();
+      const roleText = formatParticipantRoleSummary(state.industry);
+      const goodsText = formatParticipantGoodsSummary(state.industry);
+      const dash = "—";
+
+      const companyHtml = participantCompanyProfileListInnerHtml();
+      companyList.innerHTML = companyHtml;
+      const hasCompanyRow = companyHtml.length > 0;
+      companyList.classList.toggle("is-hidden", !hasCompanyRow);
+      companyEmpty.classList.toggle("is-hidden", hasCompanyRow);
+      companyEmpty.textContent = dash;
+
+      const roleHtml = participantRoleProfileListInnerHtml();
+      roleList.innerHTML = roleHtml;
+      const hasRoleRow = roleHtml.length > 0;
+      roleList.classList.toggle("is-hidden", !hasRoleRow);
+      roleEmpty.classList.toggle("is-hidden", hasRoleRow);
+      roleEmpty.textContent = dash;
+
+      const goodsListHtml = participantGoodsProfileListInnerHtml(state.industry);
+      productsList.innerHTML = goodsListHtml;
+      const hasProductRows = goodsListHtml.length > 0;
+      productsList.classList.toggle("is-hidden", !hasProductRows);
+      productsEmpty.classList.toggle("is-hidden", hasProductRows);
+      productsEmpty.textContent = dash;
+      const show = Boolean(company || roleText || goodsText) || participantRawMaterialsIsComplete();
+      profileCard.classList.toggle("is-hidden", !show);
     }
-    const goodsText = formatParticipantGoodsSummary(state.industry);
-    const rawMatText = formatParticipantRawMaterialsSummary(state.industry);
-    let text = "";
-    if (company) text = `Company / industry you entered: ${company}`;
-    if (roleText) text = text ? `${text} · Role: ${roleText}` : `Role: ${roleText}`;
-    if (goodsText) text = text ? `${text} · Goods/products: ${goodsText}` : `Goods/products: ${goodsText}`;
-    if (rawMatText) {
-      text = text ? `${text} · Raw materials: ${rawMatText}` : `Raw materials: ${rawMatText}`;
+    const redrawLocBtn = document.getElementById("participantProfileRedrawWorkplaceBtn");
+    if (redrawLocBtn) {
+      const hasWp = participantHasWorkplaceLocation();
+      redrawLocBtn.disabled = !hasWp;
+      redrawLocBtn.title = hasWp
+        ? "Remove the current company location and click the map to place it again"
+        : "Place your company on the map first; then you can redraw the location here";
     }
-    indEl.textContent = text;
-    indEl.classList.toggle("is-hidden", !text);
   }
 
   const condInd = document.getElementById("conductorIndustryLabel");
@@ -1553,6 +1682,22 @@ function updateParticipantRawMaterialOriginBanner() {
 }
 
 function setStep(step) {
+  // Participant UI has no step tabs or per-step side panels; keep one map view and question-driven flows.
+  if (SURVEY_MODE === "participant") {
+    ui.activeStep = "locations";
+    updateParticipantCompanyBanner();
+    updateParticipantRawMaterialOriginBanner();
+    syncParticipantLeftPanel();
+    if (!map) return;
+    if (layers?.locations && !map.hasLayer(layers.locations)) layers.locations.addTo(map);
+    if (layers?.pendingLocation && !map.hasLayer(layers.pendingLocation)) layers.pendingLocation.addTo(map);
+    if (layers?.currentRoutes && !map.hasLayer(layers.currentRoutes)) layers.currentRoutes.addTo(map);
+    if (layers?.ibxRoutes && !map.hasLayer(layers.ibxRoutes)) layers.ibxRoutes.addTo(map);
+    if (layers?.ibxLine && !map.hasLayer(layers.ibxLine)) layers.ibxLine.addTo(map);
+    if (layers?.ibxStations && !map.hasLayer(layers.ibxStations)) layers.ibxStations.addTo(map);
+    return;
+  }
+
   ui.activeStep = step;
   document.querySelectorAll(".tab").forEach((el) => {
     el.classList.toggle("is-active", el.dataset.step === step);
@@ -1573,6 +1718,8 @@ function setStep(step) {
 
   updateParticipantCompanyBanner();
   updateParticipantRawMaterialOriginBanner();
+
+  if (step === "locations") syncParticipantLeftPanel();
 
   if (step !== "locations") clearPendingLocation();
 
@@ -2460,11 +2607,11 @@ function setParticipantMapHintAfterIndustryGate() {
   if (!hasWorkplace) {
     ui.locationType = "workplace";
     hintEl.textContent =
-      "Workplace (your company) is selected. Click the map once to mark where that company is located. You can switch modes below to add other site types.";
+      "Workplace (your company): click the map once to mark where that company is located.";
   } else {
     ui.locationType = "none";
     hintEl.textContent =
-      "Select a location type on the left, then click the map to add points or draw routes on later steps.";
+      "Follow the questions to continue. The map will be used when a step asks you to mark a location or draw a route.";
   }
   syncRawMaterialOriginMapSkipVisibility();
 }
@@ -2591,7 +2738,101 @@ function formatParticipantGoodsSummary(industry) {
   return parts.join("; ");
 }
 
+function formatParticipantRoleSummary(industry) {
+  const rk = String(industry?.roleKey ?? "").trim();
+  if (rk === "manager") return "Manager";
+  if (rk === "worker") return "Worker";
+  if (rk === "transporter") return "Transporter";
+  if (rk === "other") {
+    const d = String(industry?.roleOtherDetail ?? "").trim();
+    return d ? `Others (${d})` : "Others";
+  }
+  return "";
+}
+
+function openParticipantIndustryGateForEdit() {
+  if (SURVEY_MODE !== "participant") return;
+  const gate = document.getElementById("industryGate");
+  const input = document.getElementById("industryCompanyInput");
+  if (!gate || !input) return;
+  document.getElementById("roleGate")?.classList.remove("is-open");
+  document.getElementById("goodsGate")?.classList.remove("is-open");
+  input.value = String(state.industry?.companyName ?? "");
+  gate.classList.add("is-open");
+  syncParticipantMapGateOverlay();
+  requestAnimationFrame(() => input.focus());
+}
+
+function initParticipantIndustryGateOnce() {
+  if (SURVEY_MODE !== "participant" || document.body.dataset.participantIndustryGateBound === "1") return;
+  const gate = document.getElementById("industryGate");
+  const input = document.getElementById("industryCompanyInput");
+  const btn = document.getElementById("industryContinueBtn");
+  if (!gate || !input || !btn) return;
+  document.body.dataset.participantIndustryGateBound = "1";
+
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") btn.click();
+  });
+
+  btn.addEventListener("click", () => {
+    const name = String(input?.value ?? "").trim();
+    if (!name) {
+      window.alert("Please enter the industry or company you work in.");
+      return;
+    }
+    state.industry = { ...state.industry, companyName: name };
+    gate.classList.remove("is-open");
+    syncParticipantMapGateOverlay();
+    void flushSaveToServer();
+    rebuildFromState();
+    uiUpdateStats();
+    setParticipantMapHintAfterIndustryGate();
+    if (map) {
+      requestAnimationFrame(() => map.invalidateSize());
+      setTimeout(() => map.invalidateSize(), 200);
+    }
+  });
+}
+
+/** Remove the workplace marker and enter placement mode so the participant can mark the company again on the map. */
+function participantRedrawWorkplaceLocation() {
+  if (readOnly || SURVEY_MODE !== "participant") return;
+  if (!participantHasWorkplaceLocation()) return;
+  clearPendingLocation();
+  resetSupplyChainRouteDraft();
+  state.locations = state.locations.filter((l) => l.locationType !== "workplace");
+  void flushSaveToServer();
+  rebuildFromState();
+  uiUpdateStats();
+  setParticipantMapHintAfterIndustryGate();
+  syncParticipantMapGateOverlay();
+  syncParticipantLeftPanel();
+  if (map) {
+    requestAnimationFrame(() => map.invalidateSize());
+  }
+}
+
+function initParticipantProfileStripOnce() {
+  if (SURVEY_MODE !== "participant" || document.body.dataset.participantProfileStripBound === "1") return;
+  document.body.dataset.participantProfileStripBound = "1";
+  document.getElementById("participantProfileCompanyBtn")?.addEventListener("click", () => {
+    openParticipantIndustryGateForEdit();
+  });
+  document.getElementById("participantProfileRedrawWorkplaceBtn")?.addEventListener("click", () => {
+    participantRedrawWorkplaceLocation();
+  });
+  document.getElementById("participantProfileRoleBtn")?.addEventListener("click", () => {
+    openParticipantRoleGate();
+  });
+  document.getElementById("participantProfileProductsBtn")?.addEventListener("click", () => {
+    openParticipantGoodsGate();
+  });
+}
+
 function openParticipantRoleGate() {
+  document.getElementById("industryGate")?.classList.remove("is-open");
+  document.getElementById("goodsGate")?.classList.remove("is-open");
   const gate = document.getElementById("roleGate");
   if (!gate) return;
   gate.classList.add("is-open");
@@ -2679,6 +2920,8 @@ function maybeOpenParticipantRoleGate() {
 }
 
 function openParticipantGoodsGate() {
+  document.getElementById("industryGate")?.classList.remove("is-open");
+  document.getElementById("roleGate")?.classList.remove("is-open");
   const gate = document.getElementById("goodsGate");
   if (!gate) return;
   gate.classList.add("is-open");
@@ -2877,6 +3120,7 @@ function participantRawMaterialBranchWorkIncomplete() {
   ensureRawMaterialBranchesAligned();
   for (let i = 0; i < mats.length; i++) {
     const b = state.industry.rawMaterialBranches[i];
+    if (rawMaterialSupplyChainBranchNeedsIntroGate(b)) return true;
     if (rawMaterialOriginBranchNeedsCategoryGate(b)) return true;
     if (rawMaterialOriginBranchNeedsMap(b)) return true;
     if (rawMaterialSupplyChainBranchNeedsDiagramGate(b)) return true;
@@ -2886,45 +3130,49 @@ function participantRawMaterialBranchWorkIncomplete() {
 }
 
 function resumeRawMaterialBranchFlow() {
-  if (!participantRawMaterialBranchWorkIncomplete()) {
-    ui.rawMaterialBranchMap = null;
-    ui.rawMaterialOriginEditingIndex = null;
-    ui.rawMaterialSupplyChainDiagramIndex = null;
-    resetSupplyChainRouteDraft();
-    document.getElementById("rawMaterialSupplyChainDiagramGate")?.classList.remove("is-open");
-    return;
-  }
-  ensureRawMaterialBranchesAligned();
-  const mats = state.industry.rawMaterials ?? [];
-  for (let i = 0; i < mats.length; i++) {
-    const b = state.industry.rawMaterialBranches[i];
-    if (rawMaterialSupplyChainBranchNeedsIntroGate(b)) {
-      openRawMaterialSupplyChainIntroGate(i);
-      return;
-    }
-    if (rawMaterialOriginBranchNeedsCategoryGate(b)) {
-      openRawMaterialOriginQuestionGate(i);
-      return;
-    }
-    if (rawMaterialOriginBranchNeedsMap(b)) {
-      ui.rawMaterialBranchMap = { materialIndex: i };
-      ui.rawMaterialOriginEditingIndex = null;
-      syncParticipantMapGateOverlay();
-      setParticipantMapHintAfterIndustryGate();
-      return;
-    }
-    if (rawMaterialSupplyChainBranchNeedsDiagramGate(b)) {
-      openRawMaterialSupplyChainDiagramGate(i);
-      return;
-    }
-    if (rawMaterialSupplyChainBranchNeedsTransportRoutes(b)) {
+  try {
+    if (!participantRawMaterialBranchWorkIncomplete()) {
       ui.rawMaterialBranchMap = null;
       ui.rawMaterialOriginEditingIndex = null;
-      startSupplyChainTransportRouteDrawing(i);
-      syncParticipantMapGateOverlay();
-      setParticipantMapHintAfterIndustryGate();
+      ui.rawMaterialSupplyChainDiagramIndex = null;
+      resetSupplyChainRouteDraft();
+      document.getElementById("rawMaterialSupplyChainDiagramGate")?.classList.remove("is-open");
       return;
     }
+    ensureRawMaterialBranchesAligned();
+    const mats = state.industry.rawMaterials ?? [];
+    for (let i = 0; i < mats.length; i++) {
+      const b = state.industry.rawMaterialBranches[i];
+      if (rawMaterialSupplyChainBranchNeedsIntroGate(b)) {
+        openRawMaterialSupplyChainIntroGate(i);
+        return;
+      }
+      if (rawMaterialOriginBranchNeedsCategoryGate(b)) {
+        openRawMaterialOriginQuestionGate(i);
+        return;
+      }
+      if (rawMaterialOriginBranchNeedsMap(b)) {
+        ui.rawMaterialBranchMap = { materialIndex: i };
+        ui.rawMaterialOriginEditingIndex = null;
+        syncParticipantMapGateOverlay();
+        setParticipantMapHintAfterIndustryGate();
+        return;
+      }
+      if (rawMaterialSupplyChainBranchNeedsDiagramGate(b)) {
+        openRawMaterialSupplyChainDiagramGate(i);
+        return;
+      }
+      if (rawMaterialSupplyChainBranchNeedsTransportRoutes(b)) {
+        ui.rawMaterialBranchMap = null;
+        ui.rawMaterialOriginEditingIndex = null;
+        startSupplyChainTransportRouteDrawing(i);
+        syncParticipantMapGateOverlay();
+        setParticipantMapHintAfterIndustryGate();
+        return;
+      }
+    }
+  } finally {
+    syncParticipantLeftPanel();
   }
 }
 
@@ -3029,8 +3277,8 @@ function originIconSrcForSupplyChain(b) {
   return ORIGIN_TYPE_ICONS[k] ?? ORIGIN_TYPE_ICONS.storage_facility;
 }
 
-function collectSupplyChainDiagramFromMount(materialIndex) {
-  const mount = document.getElementById("rawMaterialSupplyChainDiagramMount");
+function collectSupplyChainDiagramFromMount(materialIndex, mountId = "rawMaterialSupplyChainDiagramMount") {
+  const mount = document.getElementById(mountId);
   if (!mount) return null;
   ensureRawMaterialBranchesAligned();
   const br = state.industry.rawMaterialBranches[materialIndex];
@@ -3114,19 +3362,25 @@ function bindSupplyChainDiagramTrackLayout(mountEl) {
   );
 }
 
-function renderSupplyChainDiagramMount(materialIndex) {
-  const mount = document.getElementById("rawMaterialSupplyChainDiagramMount");
+function renderSupplyChainDiagramMount(materialIndex, options = {}) {
+  const mountId = options.mountId ?? "rawMaterialSupplyChainDiagramMount";
+  const readOnly = options.readOnly === true;
+  const mount = document.getElementById(mountId);
   if (!mount) return;
   ensureRawMaterialBranchesAligned();
   const br = state.industry.rawMaterialBranches[materialIndex];
   if (!br) return;
   let d = applySupplyChainDiagramConstraints(br.supplyChainDiagram ?? defaultSupplyChainDiagram());
-  br.supplyChainDiagram = d;
+  if (!readOnly) {
+    br.supplyChainDiagram = d;
+  }
+  mount.classList.toggle("supplyChainDiagramMount--sidebarReadonly", readOnly);
   const nodes = d.modalChangeNodes;
   const legs = d.transportLegs;
   const matLabel = String(state.industry.rawMaterials[materialIndex] ?? "").trim() || "this material";
   const originSummary = formatOriginLabelForSupplyChainABranch(br);
   const originIcon = originIconSrcForSupplyChain(br);
+  const showRedrawButtons = mountId === "participantLeftDiagramMount" && SURVEY_MODE === "participant" && !readOnly;
 
   const parts = [];
   parts.push(`<div class="supplyChainDiagram__flow">`);
@@ -3141,7 +3395,11 @@ function renderSupplyChainDiagramMount(materialIndex) {
   parts.push(
     `<div class="supplyChainDiagram__readonly"><img class="supplyChainDiagram__icon" src="${originIcon}" alt=""/> <span>${originSummary}</span></div>`
   );
-  parts.push(`<p class="supplyChainDiagram__hint">Same as your answer for where ${escapeHtml(matLabel)} originates.</p>`);
+  parts.push(
+    readOnly
+      ? `<p class="supplyChainDiagram__hint">Reference while you draw each transportation leg on the map.</p>`
+      : `<p class="supplyChainDiagram__hint">Same as your answer for where ${escapeHtml(matLabel)} originates.</p>`
+  );
   parts.push(`</div></div>`);
 
   // Transport legs and B nodes: leg[0] … leg[n] for n nodes
@@ -3154,25 +3412,46 @@ function renderSupplyChainDiagramMount(materialIndex) {
       : null;
     const showTOther = leg.modeKey === "other";
     const tlab = `Transportation ${ni + 1}`;
+    const transportDisabled = readOnly || requiredMode ? " disabled" : "";
+    const tInputRo = readOnly ? " readonly" : "";
     parts.push(`<div class="supplyChainDiagram__row supplyChainDiagram__row--transport">`);
     parts.push(`<div class="supplyChainDiagram__trackPad" aria-hidden="true"></div>`);
     parts.push(`<div class="supplyChainDiagram__fields">`);
-    parts.push(`<div class="supplyChainDiagram__fieldLabel">${escapeHtml(tlab)}</div>`);
+    if (showRedrawButtons) {
+      const canR = canRedrawSupplyChainTransportLeg(br, legIdx);
+      const redrawTitle = canR
+        ? "Clear this leg and all later legs on the map, then redraw starting here"
+        : "Complete earlier transportation routes on the map first (and originating location for Transportation 1)";
+      parts.push(`<div class="supplyChainDiagram__transportLabelBar">`);
+      parts.push(`<span class="supplyChainDiagram__fieldLabel supplyChainDiagram__fieldLabel--bar">${escapeHtml(tlab)}</span>`);
+      parts.push(
+        `<button type="button" class="ghostBtn supplyChainDiagram__redrawRouteBtn" data-sc-redraw-route-leg="${legIdx}"${
+          canR ? "" : " disabled"
+        } title="${escapeHtml(redrawTitle)}">Redraw Route</button>`
+      );
+      parts.push(`</div>`);
+    } else {
+      parts.push(`<div class="supplyChainDiagram__fieldLabel">${escapeHtml(tlab)}</div>`);
+    }
     parts.push(
       `<select class="goodsGate__input supplyChainDiagram__select" data-sc-transport-leg="${legIdx}" aria-label="${escapeHtml(
         tlab
-      )} mode"${requiredMode ? " disabled" : ""}>`
+      )} mode"${transportDisabled}>`
     );
     parts.push(supplyChainTransportSelectHtml(leg.modeKey, legAllowed));
     parts.push(`</select>`);
     parts.push(
       `<div class="goodsOtherWrap supplyChainDiagram__otherWrap${showTOther ? "" : " is-hidden"}" data-sc-transport-other-wrap="${legIdx}">`
     );
-    parts.push(`<input type="text" class="goodsGate__input" data-sc-transport-other="${legIdx}" maxlength="300" placeholder="Specify mode" value="${escapeHtml(leg.otherDetail)}" />`);
-    parts.push(`</div>`);
     parts.push(
-      `<div class="supplyChainDiagram__inlineActions"><button type="button" class="supplyChainDiagram__iconBtn" data-sc-add-after-leg="${legIdx}" title="Add transportation mode change">+</button></div>`
+      `<input type="text" class="goodsGate__input" data-sc-transport-other="${legIdx}" maxlength="300" placeholder="Specify mode" value="${escapeHtml(leg.otherDetail)}"${tInputRo} />`
     );
+    parts.push(`</div>`);
+    if (!readOnly) {
+      parts.push(
+        `<div class="supplyChainDiagram__inlineActions"><button type="button" class="supplyChainDiagram__iconBtn" data-sc-add-after-leg="${legIdx}" title="Add transportation mode change">+</button></div>`
+      );
+    }
     parts.push(`</div></div>`);
 
     if (ni < nodes.length) {
@@ -3181,12 +3460,14 @@ function renderSupplyChainDiagramMount(materialIndex) {
       const bLabel = nodes.length <= 1 ? "B" : `B${ni + 1}`;
       const incomingMode = legs[ni]?.modeKey ?? "";
       const allowedModal = allowedModalChangeKeysForIncomingMode(incomingMode);
+      const modalDisabled = readOnly ? " disabled" : "";
+      const mInputRo = readOnly ? " readonly" : "";
       parts.push(`<div class="supplyChainDiagram__row supplyChainDiagram__row--b">`);
       parts.push(`<div class="supplyChainDiagram__nodeDot supplyChainDiagram__nodeDot--b" aria-hidden="true">${escapeHtml(bLabel)}</div>`);
       parts.push(`<div class="supplyChainDiagram__fields">`);
       parts.push(`<div class="supplyChainDiagram__fieldLabel">Transportation Mode Change</div>`);
       parts.push(
-        `<select class="goodsGate__input supplyChainDiagram__select" data-sc-modal-node="${ni}" aria-label="Mode change ${ni + 1}">`
+        `<select class="goodsGate__input supplyChainDiagram__select" data-sc-modal-node="${ni}" aria-label="Mode change ${ni + 1}"${modalDisabled}>`
       );
       parts.push(supplyChainModalSelectHtml(node.modalChangeKey, allowedModal));
       parts.push(`</select>`);
@@ -3194,12 +3475,14 @@ function renderSupplyChainDiagramMount(materialIndex) {
         `<div class="goodsOtherWrap supplyChainDiagram__otherWrap${showMOther ? "" : " is-hidden"}" data-sc-modal-other-wrap="${ni}">`
       );
       parts.push(
-        `<input type="text" class="goodsGate__input" data-sc-modal-other="${ni}" maxlength="300" placeholder="Specify" value="${escapeHtml(node.otherDetail)}" />`
+        `<input type="text" class="goodsGate__input" data-sc-modal-other="${ni}" maxlength="300" placeholder="Specify" value="${escapeHtml(node.otherDetail)}"${mInputRo} />`
       );
       parts.push(`</div>`);
-      parts.push(
-        `<div class="supplyChainDiagram__inlineActions"><button type="button" class="supplyChainDiagram__iconBtn supplyChainDiagram__iconBtn--minus" data-sc-remove-b="${ni}" title="Remove this step">−</button></div>`
-      );
+      if (!readOnly) {
+        parts.push(
+          `<div class="supplyChainDiagram__inlineActions"><button type="button" class="supplyChainDiagram__iconBtn supplyChainDiagram__iconBtn--minus" data-sc-remove-b="${ni}" title="Remove this step">−</button></div>`
+        );
+      }
       parts.push(`</div></div>`);
     }
   }
@@ -3207,12 +3490,14 @@ function renderSupplyChainDiagramMount(materialIndex) {
   // C — destination
   const dk = d.destinationCategoryKey;
   const showDOther = dk === "other";
+  const destDisabled = readOnly ? " disabled" : "";
+  const dInputRo = readOnly ? " readonly" : "";
   parts.push(`<div class="supplyChainDiagram__row supplyChainDiagram__row--c">`);
   parts.push(`<div class="supplyChainDiagram__nodeDot" aria-hidden="true">C</div>`);
   parts.push(`<div class="supplyChainDiagram__fields">`);
   parts.push(`<div class="supplyChainDiagram__fieldLabel">Destination</div>`);
   parts.push(
-    `<select class="goodsGate__input supplyChainDiagram__select" data-sc="destination-category" aria-label="Destination">`
+    `<select class="goodsGate__input supplyChainDiagram__select" data-sc="destination-category" aria-label="Destination"${destDisabled}>`
   );
   parts.push(supplyChainLocationSelectHtml(dk));
   parts.push(`</select>`);
@@ -3220,7 +3505,7 @@ function renderSupplyChainDiagramMount(materialIndex) {
     `<div class="goodsOtherWrap supplyChainDiagram__otherWrap${showDOther ? "" : " is-hidden"}" data-sc-dest-other-wrap>`
   );
   parts.push(
-    `<input type="text" class="goodsGate__input" data-sc="destination-other" maxlength="300" placeholder="Specify destination" value="${escapeHtml(d.destinationOtherDetail)}" />`
+    `<input type="text" class="goodsGate__input" data-sc="destination-other" maxlength="300" placeholder="Specify destination" value="${escapeHtml(d.destinationOtherDetail)}"${dInputRo} />`
   );
   parts.push(`</div>`);
   parts.push(`</div></div>`);
@@ -3229,57 +3514,212 @@ function renderSupplyChainDiagramMount(materialIndex) {
 
   mount.innerHTML = parts.join("");
 
-  const applyDiagram = (nextD) => {
-    ensureRawMaterialBranchesAligned();
-    const row = state.industry.rawMaterialBranches[materialIndex];
-    if (!row) return;
-    row.supplyChainDiagram = applySupplyChainDiagramConstraints(nextD);
-    renderSupplyChainDiagramMount(materialIndex);
-  };
+  if (!readOnly) {
+    const applyDiagram = (nextD) => {
+      ensureRawMaterialBranchesAligned();
+      const row = state.industry.rawMaterialBranches[materialIndex];
+      if (!row) return;
+      row.supplyChainDiagram = applySupplyChainDiagramConstraints(nextD);
+      row.supplyChainTransportRoutes = normalizeSupplyChainTransportRoutesForBranch(
+        row.supplyChainTransportRoutes,
+        row.supplyChainDiagram
+      );
+      renderSupplyChainDiagramMount(materialIndex, options);
+    };
 
-  /** Merge current form fields from the DOM into state before changing structure. */
-  function snapshotDiagramFromDomOrState() {
-    const fromDom = collectSupplyChainDiagramFromMount(materialIndex);
-    if (fromDom) return fromDom;
-    const row = state.industry.rawMaterialBranches[materialIndex];
-    return row?.supplyChainDiagram
-      ? applySupplyChainDiagramConstraints(row.supplyChainDiagram)
-      : applySupplyChainDiagramConstraints(defaultSupplyChainDiagram());
+    /** Merge current form fields from the DOM into state before changing structure. */
+    function snapshotDiagramFromDomOrState() {
+      const mid = options.mountId ?? "rawMaterialSupplyChainDiagramMount";
+      const fromDom = collectSupplyChainDiagramFromMount(materialIndex, mid);
+      if (fromDom) return fromDom;
+      const row = state.industry.rawMaterialBranches[materialIndex];
+      return row?.supplyChainDiagram
+        ? applySupplyChainDiagramConstraints(row.supplyChainDiagram)
+        : applySupplyChainDiagramConstraints(defaultSupplyChainDiagram());
+    }
+
+    mount.querySelectorAll("[data-sc-transport-leg]").forEach((sel) => {
+      sel.addEventListener("change", () => {
+        const next = snapshotDiagramFromDomOrState();
+        applyDiagram(next);
+      });
+    });
+    mount.querySelectorAll("[data-sc-modal-node]").forEach((sel) => {
+      sel.addEventListener("change", () => {
+        const next = snapshotDiagramFromDomOrState();
+        applyDiagram(next);
+      });
+    });
+    const destSel = mount.querySelector('[data-sc="destination-category"]');
+    destSel?.addEventListener("change", () => {
+      const next = snapshotDiagramFromDomOrState();
+      applyDiagram(next);
+    });
+
+    mount.querySelectorAll("[data-sc-add-after-leg]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        applyDiagram(supplyChainDiagramAddB(snapshotDiagramFromDomOrState()));
+      });
+    });
+    mount.querySelectorAll("[data-sc-remove-b]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const bi = Number(btn.getAttribute("data-sc-remove-b"));
+        applyDiagram(supplyChainDiagramRemoveB(snapshotDiagramFromDomOrState(), bi));
+      });
+    });
+
+    mount.querySelectorAll("[data-sc-redraw-route-leg]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        if (btn.disabled) return;
+        const li = Number(btn.getAttribute("data-sc-redraw-route-leg"));
+        if (Number.isNaN(li)) return;
+        participantRedrawSupplyChainRouteFromLeg(materialIndex, li);
+      });
+    });
   }
-
-  mount.querySelectorAll("[data-sc-transport-leg]").forEach((sel) => {
-    sel.addEventListener("change", () => {
-      const next = snapshotDiagramFromDomOrState();
-      applyDiagram(next);
-    });
-  });
-  mount.querySelectorAll("[data-sc-modal-node]").forEach((sel) => {
-    sel.addEventListener("change", () => {
-      const next = snapshotDiagramFromDomOrState();
-      applyDiagram(next);
-    });
-  });
-  const destSel = mount.querySelector('[data-sc="destination-category"]');
-  destSel?.addEventListener("change", () => {
-    const next = snapshotDiagramFromDomOrState();
-    applyDiagram(next);
-  });
-
-  mount.querySelectorAll("[data-sc-add-after-leg]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      applyDiagram(supplyChainDiagramAddB(snapshotDiagramFromDomOrState()));
-    });
-  });
-  mount.querySelectorAll("[data-sc-remove-b]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const bi = Number(btn.getAttribute("data-sc-remove-b"));
-      applyDiagram(supplyChainDiagramRemoveB(snapshotDiagramFromDomOrState(), bi));
-    });
-  });
 
   bindSupplyChainDiagramTrackLayout(mount);
   requestAnimationFrame(() => {
     requestAnimationFrame(() => positionSupplyChainDiagramTrack(mount));
+  });
+}
+
+/**
+ * Participant Step 1: raw-material pills + products placeholder + detail diagram.
+ * Empty until raw materials list exists; detail needs a selected pill.
+ */
+function syncParticipantLeftPanel() {
+  if (SURVEY_MODE !== "participant") return;
+  const emptyEl = document.getElementById("participantLeftEmpty");
+  const shellEl = document.getElementById("participantLeftShell");
+  const pillsEl = document.getElementById("participantRawMaterialPills");
+  const detailEl = document.getElementById("participantLeftDetail");
+  const detailName = document.getElementById("participantLeftDetailName");
+  const placeholderEl = document.getElementById("participantLeftDetailPlaceholder");
+  const mountEl = document.getElementById("participantLeftDiagramMount");
+  const saveRow = document.getElementById("participantDiagramSaveRow");
+  if (!emptyEl || !shellEl) return;
+
+  const mats = state.industry.rawMaterials ?? [];
+  const hasMaterials = participantRawMaterialsIsComplete();
+
+  if (!hasMaterials) {
+    emptyEl.classList.remove("is-hidden");
+    emptyEl.setAttribute("aria-hidden", "false");
+    shellEl.classList.add("is-hidden");
+    ui.participantSelectedRawMaterialIndex = null;
+    if (mountEl) mountEl.innerHTML = "";
+    if (saveRow) saveRow.classList.add("is-hidden");
+    if (placeholderEl) {
+      placeholderEl.classList.add("is-hidden");
+      placeholderEl.textContent = "";
+    }
+    return;
+  }
+
+  emptyEl.classList.add("is-hidden");
+  emptyEl.setAttribute("aria-hidden", "true");
+  shellEl.classList.remove("is-hidden");
+
+  const dr = ui.rawMaterialSupplyChainRouteDrawing;
+  if (dr && dr.materialIndex != null) {
+    ui.participantSelectedRawMaterialIndex = dr.materialIndex;
+  }
+
+  if (mats.length > 0) {
+    if (ui.participantSelectedRawMaterialIndex == null || ui.participantSelectedRawMaterialIndex < 0) {
+      ui.participantSelectedRawMaterialIndex = 0;
+    } else if (ui.participantSelectedRawMaterialIndex >= mats.length) {
+      ui.participantSelectedRawMaterialIndex = mats.length - 1;
+    }
+  }
+
+  let pillsHtml = "";
+  for (let i = 0; i < mats.length; i++) {
+    const label = String(mats[i] ?? "").trim() || `Material ${i + 1}`;
+    const active = ui.participantSelectedRawMaterialIndex === i ? " is-active" : "";
+    pillsHtml += `<button type="button" class="participantPill${active}" data-participant-rm-index="${i}" role="tab" aria-selected="${
+      ui.participantSelectedRawMaterialIndex === i ? "true" : "false"
+    }">${escapeHtml(label)}</button>`;
+  }
+  if (pillsEl) pillsEl.innerHTML = pillsHtml;
+
+  const sel = ui.participantSelectedRawMaterialIndex;
+  if (sel == null || sel < 0 || sel >= mats.length) {
+    if (detailEl) detailEl.classList.add("is-hidden");
+    if (mountEl) mountEl.innerHTML = "";
+    if (saveRow) saveRow.classList.add("is-hidden");
+    if (placeholderEl) placeholderEl.classList.add("is-hidden");
+    return;
+  }
+
+  if (detailEl) detailEl.classList.remove("is-hidden");
+  if (detailName) detailName.textContent = String(mats[sel] ?? "").trim() || `Material ${sel + 1}`;
+
+  ensureRawMaterialBranchesAligned();
+  const br = state.industry.rawMaterialBranches?.[sel];
+  if (!br) {
+    if (mountEl) mountEl.innerHTML = "";
+    if (saveRow) saveRow.classList.add("is-hidden");
+    return;
+  }
+
+  if (
+    rawMaterialSupplyChainBranchNeedsIntroGate(br) ||
+    rawMaterialOriginBranchNeedsCategoryGate(br) ||
+    rawMaterialOriginBranchNeedsMap(br)
+  ) {
+    if (mountEl) mountEl.innerHTML = "";
+    if (placeholderEl) {
+      placeholderEl.classList.remove("is-hidden");
+      placeholderEl.textContent =
+        "Answer the prompts (intro, origin, and map if needed) for this material before the supply chain diagram appears here.";
+    }
+    if (saveRow) saveRow.classList.add("is-hidden");
+    return;
+  }
+
+  if (br.originCategoryKey === RAW_MATERIAL_ORIGIN_SKIPPED_KEY) {
+    if (mountEl) mountEl.innerHTML = "";
+    if (placeholderEl) {
+      placeholderEl.classList.remove("is-hidden");
+      placeholderEl.textContent = "This raw material was skipped — no supply chain diagram.";
+    }
+    if (saveRow) saveRow.classList.add("is-hidden");
+    return;
+  }
+
+  // First-time diagram entry uses the floating popup; after it is saved, the left panel shows the diagram for review/editing.
+  if (rawMaterialSupplyChainBranchNeedsDiagramGate(br)) {
+    if (mountEl) mountEl.innerHTML = "";
+    if (placeholderEl) {
+      placeholderEl.classList.remove("is-hidden");
+      placeholderEl.textContent =
+        "Use the popup to complete the supply chain, then click Confirm & Save. The diagram will show here afterward for review and editing (including after map routes).";
+    }
+    if (saveRow) saveRow.classList.add("is-hidden");
+    return;
+  }
+
+  if (placeholderEl) {
+    placeholderEl.classList.add("is-hidden");
+    placeholderEl.textContent = "";
+  }
+
+  const drawingHere = Boolean(dr && dr.materialIndex === sel);
+  const readOnly = drawingHere;
+
+  renderSupplyChainDiagramMount(sel, {
+    readOnly,
+    mountId: "participantLeftDiagramMount"
+  });
+
+  if (saveRow) {
+    saveRow.classList.toggle("is-hidden", readOnly);
+  }
+
+  requestAnimationFrame(() => {
+    positionSupplyChainDiagramTrack(document.getElementById("participantLeftDiagramMount"));
   });
 }
 
@@ -3303,9 +3743,15 @@ function openRawMaterialSupplyChainDiagramGate(materialIndex) {
   if (titleEl) {
     titleEl.textContent = `Please Provide the Supply Chain Information of ${matName}`;
   }
+  if (SURVEY_MODE === "participant") {
+    ui.participantSelectedRawMaterialIndex = materialIndex;
+  }
   gate.classList.add("is-open");
   renderSupplyChainDiagramMount(materialIndex);
   syncParticipantMapGateOverlay();
+  if (SURVEY_MODE === "participant") {
+    syncParticipantLeftPanel();
+  }
   requestAnimationFrame(() => {
     positionSupplyChainDiagramTrack(document.getElementById("rawMaterialSupplyChainDiagramMount"));
     document.getElementById("rawMaterialSupplyChainDiagramSaveBtn")?.focus();
@@ -3398,19 +3844,46 @@ function initParticipantRawMaterialOriginMapSkipOnce() {
   btn.addEventListener("click", () => skipRawMaterialOriginMap());
 }
 
+function initParticipantLeftPanelOnce() {
+  if (SURVEY_MODE !== "participant" || document.body.dataset.participantLeftPanelBound === "1") return;
+  const pills = document.getElementById("participantRawMaterialPills");
+  if (!pills) return;
+  document.body.dataset.participantLeftPanelBound = "1";
+  pills.addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-participant-rm-index]");
+    if (!btn) return;
+    const i = Number(btn.getAttribute("data-participant-rm-index"));
+    if (Number.isNaN(i)) return;
+    ui.participantSelectedRawMaterialIndex = i;
+    syncParticipantLeftPanel();
+  });
+}
+
 function initParticipantRawMaterialSupplyChainDiagramOnce() {
   if (SURVEY_MODE !== "participant" || document.body.dataset.participantRawMaterialDiagramBound === "1") {
     return;
   }
   const gate = document.getElementById("rawMaterialSupplyChainDiagramGate");
-  const btn = document.getElementById("rawMaterialSupplyChainDiagramSaveBtn");
-  if (!gate || !btn) return;
+  const modalBtn = document.getElementById("rawMaterialSupplyChainDiagramSaveBtn");
+  const leftBtn = document.getElementById("participantLeftDiagramSaveBtn");
+  if (!modalBtn && !leftBtn) return;
   document.body.dataset.participantRawMaterialDiagramBound = "1";
-  btn.addEventListener("click", () => {
+
+  const commitSupplyChainDiagramSave = () => {
     if (readOnly) return;
-    const idx = ui.rawMaterialSupplyChainDiagramIndex;
+    const idx =
+      ui.participantSelectedRawMaterialIndex != null && ui.participantSelectedRawMaterialIndex >= 0
+        ? ui.participantSelectedRawMaterialIndex
+        : ui.rawMaterialSupplyChainDiagramIndex;
     if (idx == null || idx < 0) return;
-    let collected = collectSupplyChainDiagramFromMount(idx);
+    const diagramGateOpen = gate?.classList.contains("is-open");
+    const mountId =
+      diagramGateOpen
+        ? "rawMaterialSupplyChainDiagramMount"
+        : SURVEY_MODE === "participant"
+          ? "participantLeftDiagramMount"
+          : "rawMaterialSupplyChainDiagramMount";
+    let collected = collectSupplyChainDiagramFromMount(idx, mountId);
     if (!collected) return;
     collected = applySupplyChainDiagramConstraints(collected);
     if (!isSupplyChainDiagramComplete(collected)) {
@@ -3427,12 +3900,13 @@ function initParticipantRawMaterialSupplyChainDiagramOnce() {
         collected
       )
     };
-    gate.classList.remove("is-open");
+    gate?.classList.remove("is-open");
     ui.rawMaterialSupplyChainDiagramIndex = null;
     void flushSaveToServer();
     rebuildFromState();
     uiUpdateStats();
     syncParticipantMapGateOverlay();
+    syncParticipantLeftPanel();
     resumeRawMaterialBranchFlow();
     if (!participantRawMaterialBranchWorkIncomplete()) {
       setParticipantMapHintAfterIndustryGate();
@@ -3442,7 +3916,10 @@ function initParticipantRawMaterialSupplyChainDiagramOnce() {
       requestAnimationFrame(() => map.invalidateSize());
       setTimeout(() => map.invalidateSize(), 200);
     }
-  });
+  };
+
+  modalBtn?.addEventListener("click", commitSupplyChainDiagramSave);
+  leftBtn?.addEventListener("click", commitSupplyChainDiagramSave);
 }
 
 function initParticipantRawMaterialSupplyChainIntroOnce() {
@@ -3575,9 +4052,13 @@ async function finishParticipantBoot() {
   setStep("locations");
   uiUpdateStats();
   setParticipantMapHintAfterIndustryGate();
+  syncParticipantLeftPanel();
+  initParticipantIndustryGateOnce();
+  initParticipantProfileStripOnce();
   initParticipantRoleGateOnce();
   initParticipantGoodsGateOnce();
   initParticipantRawMaterialsGateOnce();
+  initParticipantLeftPanelOnce();
   initParticipantRawMaterialSupplyChainIntroOnce();
   initParticipantRawMaterialSupplyChainDiagramOnce();
   initParticipantRawMaterialOriginGateOnce();
@@ -3628,9 +4109,6 @@ async function bootParticipant() {
     return;
   }
 
-  document.querySelector('[data-step="export"]')?.classList.add("is-hidden");
-  document.querySelector('[data-step-panel="export"]')?.classList.add("is-hidden");
-
   participantId = id;
   participantToken = token;
 
@@ -3661,37 +4139,9 @@ async function bootParticipant() {
     !String(state.industry?.companyName ?? "").trim() &&
     !hasSurveyProgress;
   if (needsIndustry) {
-    const gate = document.getElementById("industryGate");
     const input = document.getElementById("industryCompanyInput");
-    const btn = document.getElementById("industryContinueBtn");
-    const submit = () => {
-      const name = String(input?.value ?? "").trim();
-      if (!name) {
-        window.alert("Please enter the industry or company you work in.");
-        return;
-      }
-      state.industry = { ...state.industry, companyName: name };
-      gate?.classList.remove("is-open");
-      syncParticipantMapGateOverlay();
-      void flushSaveToServer();
-      rebuildFromState();
-      uiUpdateStats();
-      setParticipantMapHintAfterIndustryGate();
-      if (map) {
-        requestAnimationFrame(() => map.invalidateSize());
-        setTimeout(() => map.invalidateSize(), 200);
-      }
-    };
-    if (btn) btn.onclick = submit;
-    if (input) {
-      input.onkeydown = (e) => {
-        if (e.key === "Enter") submit();
-      };
-      input.value = "";
-    }
-    gate?.classList.add("is-open");
-    syncParticipantMapGateOverlay();
-    if (input) requestAnimationFrame(() => input.focus());
+    if (input) input.value = "";
+    openParticipantIndustryGateForEdit();
     return;
   }
 
