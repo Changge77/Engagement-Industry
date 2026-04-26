@@ -65,6 +65,16 @@ const ORIGIN_TYPE_ICONS = {
   client: "Icons/General/Client.svg"
 };
 
+const SC_LOC_TO_LOCATION_TYPE = {
+  storage_facility: "warehouse",
+  distribution_center: "subdistribution",
+  manufacturing_facility: "manufacturing",
+  airport: "export",
+  port: "import",
+  client: "other",
+  other: "other"
+};
+
 /** Participant industry questionnaire: multi-select goods / products (keys match checkbox values in sub.html). */
 const GOODS_CATEGORY_OPTIONS = [
   { key: "recyclables", label: "Recyclables" },
@@ -885,6 +895,34 @@ function appendSupplyChainTransportRoutePoint(latlng) {
   setParticipantMapHintAfterIndustryGate();
 }
 
+function snapRouteToExistingLocation(latlng, locId) {
+  const dr = ui.scRouteDrawing;
+  if (!dr) return;
+  dr.previewCursorLatLng = null;
+  dr.points.push(latlng);
+  const [x, y] = gpsToEPSG2263(latlng.lng, latlng.lat);
+  dr.points2263.push([x, y]);
+
+  if (locId != null) {
+    const { branchesKey } = industryBranchArrays(dr.branchKind);
+    const row = state.industry?.[branchesKey]?.[dr.branchIndex];
+    const d = normalizeSupplyChainDiagram(row?.supplyChainDiagram);
+    const li = dr.legIndex;
+    if (li < d.modalChangeNodes.length) {
+      const scLocKey = normalizeModalChangeKey(d.modalChangeNodes[li]?.modalChangeKey);
+      const newLocType = SC_LOC_TO_LOCATION_TYPE[scLocKey];
+      if (newLocType) {
+        const locIdx = state.locations.findIndex((l) => l.id === locId);
+        if (locIdx >= 0 && state.locations[locIdx].locationType !== newLocType) {
+          state.locations[locIdx] = { ...state.locations[locIdx], locationType: newLocType };
+        }
+      }
+    }
+  }
+
+  finishSupplyChainTransportRouteLegAndContinue();
+}
+
 /** Remove the last clicked point; the automatic start point (index 0) is kept. */
 function popLastSupplyChainRoutePoint() {
   const dr = ui.scRouteDrawing;
@@ -1664,6 +1702,13 @@ function addSupplyChainBranchOriginMarkersToLocationsLayer(branches, itemLabels,
     mk.bindPopup(
       `${roleLine}<br/>${escapeHtml(itemLabel)}<br/>Where it originates: ${escapeHtml(originDesc)}`
     );
+    mk.on("click", (e) => {
+      if (ui.scRouteDrawing) {
+        L.DomEvent.stopPropagation(e);
+        mk.closePopup();
+        snapRouteToExistingLocation(mk.getLatLng(), null);
+      }
+    });
     layers.locations.addLayer(mk);
   }
 }
@@ -1728,6 +1773,13 @@ function addSupplyChainBranchStoppingPointMarkersToLayer(branches, itemLabels, k
         : (locOpt?.label ?? locKey ?? "Stopping Point");
       const mk = L.marker(latlng, { icon, draggable: false });
       mk.bindPopup(`Stopping Point ${bLabel}<br/>${escapeHtml(itemLabel)}<br/>${escapeHtml(locDesc)}`);
+      mk.on("click", (e) => {
+        if (ui.scRouteDrawing) {
+          L.DomEvent.stopPropagation(e);
+          mk.closePopup();
+          snapRouteToExistingLocation(mk.getLatLng(), null);
+        }
+      });
       layers.supplyChainDestinations.addLayer(mk);
     }
   }
@@ -1754,6 +1806,13 @@ function addSupplyChainBranchDestinationMarkersToLayer(branches, itemLabels, kin
     mk.bindPopup(
       `${roleLine}<br/>${escapeHtml(itemLabel)}<br/>Destination type: ${escapeHtml(destDesc)}`
     );
+    mk.on("click", (e) => {
+      if (ui.scRouteDrawing) {
+        L.DomEvent.stopPropagation(e);
+        mk.closePopup();
+        snapRouteToExistingLocation(mk.getLatLng(), null);
+      }
+    });
     layers.supplyChainDestinations.addLayer(mk);
   }
 }
@@ -1766,13 +1825,22 @@ function stopRouteAnimations() {
   routeAnimationHandles = [];
 }
 
-function startRouteAnimationForLeg(latlngs, modeKey) {
+const FREQ_PERIOD_MULTIPLIER = { day: 2, week: 0.75, month: 0.25 };
+
+function tripFrequencySpeedMultiplier(branch) {
+  const count = branch?.tripFrequencyCount;
+  const period = normalizeTripFrequencyPeriod(branch?.tripFrequencyPeriod);
+  if (!(count >= 1) || !period) return 1;
+  return count * (FREQ_PERIOD_MULTIPLIER[period] ?? 1);
+}
+
+function startRouteAnimationForLeg(latlngs, modeKey, speedMultiplier = 1) {
   const normalizedMode = normalizeTransportModeKey(modeKey);
   const frontSrc = ANIMATION_MODE_ICONS[normalizedMode];
   if (!frontSrc || latlngs.length < 2) return null;
 
   const ICON_SIZE = 56;
-  const PIXELS_PER_SEC = 60;
+  const PIXELS_PER_SEC = 60 * speedMultiplier;
   const isTrain = normalizedMode === "train";
   const CAR_COUNT = 3;
   const CAR_SPACING = ICON_SIZE * 0.5;
@@ -1897,7 +1965,7 @@ function rebuildRouteAnimations() {
         const latlngs = surveyPointsToLatLngs(pts);
         if (latlngs.length < 2) continue;
         const modeKey = d.transportLegs[li]?.modeKey ?? "";
-        const cancel = startRouteAnimationForLeg(latlngs, modeKey);
+        const cancel = startRouteAnimationForLeg(latlngs, modeKey, tripFrequencySpeedMultiplier(br));
         if (cancel) routeAnimationHandles.push(cancel);
       }
     }
@@ -1919,11 +1987,19 @@ function rebuildFromState() {
         ? epsg2263XYToLatLng(loc.x, loc.y)
         : L.latLng(loc.lat, loc.lng);
     const marker = L.marker(latlng, { icon: markerIcon(loc.locationType, meta.color), draggable: false });
+    marker._snapLocId = loc.id;
     const companyNote =
       loc.locationType === "workplace" && state.industry?.companyName
         ? `<br/>${escapeHtml(state.industry.companyName)}`
         : "";
     marker.bindPopup(`${meta.label}${companyNote}<br/>ID: ${loc.id}`);
+    marker.on("click", (e) => {
+      if (ui.scRouteDrawing) {
+        L.DomEvent.stopPropagation(e);
+        marker.closePopup();
+        snapRouteToExistingLocation(marker.getLatLng(), marker._snapLocId);
+      }
+    });
     layers.locations.addLayer(marker);
   }
 
