@@ -14,6 +14,7 @@
   <body data-survey-mode="conductor">
     <div id="conductorWorkspace" class="conductorWorkspace">
       <div class="conductorToolbar">
+        <h1 class="conductorToolbar__title">Manifest - Conductor</h1>
         <div class="conductorToolbar__row">
           <h2 class="conductorToolbar__h2">Participants</h2>
           <span class="conductorToolbar__hint" id="conductorViewingLabel"></span>
@@ -47,30 +48,81 @@
             aria-controls="participantFilterPanel"
           >
             <span class="participantFilterToggle__chevron" aria-hidden="true">▸</span>
-            <span id="participantFilterToggleLabel">Show participant filter</span>
+            <span id="participantFilterToggleLabel">Advance</span>
           </button>
         </div>
         <div id="participantFilterPanel" class="participantFilterPanel is-hidden">
-          <div class="participantPicker">
-            <label class="participantPicker__label" for="participantSearch">Find participant</label>
-            <input
-              id="participantSearch"
-              class="participantPicker__input"
-              type="search"
-              placeholder="Type to search (name, id)…"
-              autocomplete="off"
-            />
-            <p class="participantPicker__hint">
-              Click a row to view on the map. Delete removes that participant permanently.
-            </p>
+          <div class="manifestFilterGrid">
+            <section class="manifestFilterSection">
+              <div class="manifestFilterSection__header">
+                <h3 class="manifestFilterSection__title">Filter by Participants</h3>
+                <div class="manifestFilterSection__actions">
+                  <button class="ghostBtn manifestFilterSection__showAll" id="participantFilterShowAll" type="button">
+                    Show All
+                  </button>
+                  <button class="ghostBtn manifestFilterSection__showAll" id="participantFilterHideAll" type="button">
+                    Hide All
+                  </button>
+                </div>
+              </div>
+              <div class="participantPicker">
+                <label class="participantPicker__label" for="participantSearch">Find participant</label>
+                <input
+                  id="participantSearch"
+                  class="participantPicker__input"
+                  type="search"
+                  placeholder="Type to search (name, id)…"
+                  autocomplete="off"
+                />
+                <p class="participantPicker__hint">
+                  Check multiple participants for filtering. Use View to open one profile; Delete removes it permanently.
+                </p>
+              </div>
+              <ul id="participantList" class="participantList participantList--with-delete" aria-label="Filtered participants"></ul>
+            </section>
+            <section class="manifestFilterSection">
+              <h3 class="manifestFilterSection__title">Filter by Feature</h3>
+              <div class="manifestFeatureGroup">
+                <div class="manifestFeatureGroup__header">
+                  <h4 class="manifestFeatureGroup__title">Points</h4>
+                  <div class="manifestFeatureGroup__actions">
+                    <button class="ghostBtn manifestFeatureGroup__actionBtn" type="button" data-feature-group="point" data-feature-action="show-all">Show All</button>
+                    <button class="ghostBtn manifestFeatureGroup__actionBtn" type="button" data-feature-group="point" data-feature-action="clear-all">Hide All</button>
+                  </div>
+                </div>
+                <label class="manifestCheck"><input type="checkbox" class="manifestFilterCheckbox" data-filter-group="point" data-filter-key="company" checked /> Company</label>
+                <label class="manifestCheck"><input type="checkbox" class="manifestFilterCheckbox" data-filter-group="point" data-filter-key="starting" checked /> Starting Point</label>
+                <label class="manifestCheck"><input type="checkbox" class="manifestFilterCheckbox" data-filter-group="point" data-filter-key="stopping" checked /> Stopping Point</label>
+                <label class="manifestCheck"><input type="checkbox" class="manifestFilterCheckbox" data-filter-group="point" data-filter-key="destination" checked /> Destination</label>
+              </div>
+              <div class="manifestFeatureGroup">
+                <div class="manifestFeatureGroup__header">
+                  <h4 class="manifestFeatureGroup__title">Transportation</h4>
+                  <div class="manifestFeatureGroup__actions">
+                    <button class="ghostBtn manifestFeatureGroup__actionBtn" type="button" data-feature-group="transport" data-feature-action="show-all">Show All</button>
+                    <button class="ghostBtn manifestFeatureGroup__actionBtn" type="button" data-feature-group="transport" data-feature-action="clear-all">Hide All</button>
+                  </div>
+                </div>
+                <label class="manifestCheck"><input type="checkbox" class="manifestFilterCheckbox" data-filter-group="transport" data-filter-key="train" checked /> Train</label>
+                <label class="manifestCheck"><input type="checkbox" class="manifestFilterCheckbox" data-filter-group="transport" data-filter-key="huge" checked /> Huge Truck</label>
+                <label class="manifestCheck"><input type="checkbox" class="manifestFilterCheckbox" data-filter-group="transport" data-filter-key="small" checked /> Small Truck</label>
+                <label class="manifestCheck"><input type="checkbox" class="manifestFilterCheckbox" data-filter-group="transport" data-filter-key="others" checked /> Others</label>
+              </div>
+            </section>
+            <section class="manifestFilterSection">
+              <h3 class="manifestFilterSection__title">Analyze</h3>
+              <div class="manifestAnalyzeActions">
+                <button class="ghostBtn" type="button">Cost for One Ride</button>
+                <button class="ghostBtn" type="button">Frequency (per mo)</button>
+              </div>
+            </section>
           </div>
-          <ul id="participantList" class="participantList participantList--with-delete" aria-label="Filtered participants"></ul>
         </div>
       </div>
 
       <div id="app">
         <header class="topbar">
-          <div class="topbar__title">NYC Supply Chain Survey (conductor)</div>
+          <div class="topbar__title"></div>
           <div class="topbar__meta">
             <span class="pill" id="activeStepPill">Map · all layers (read-only)</span>
           </div>
@@ -108,7 +160,7 @@
               </div>
               <div class="participantAsideContent conductorAsideContent">
                 <div id="conductorLeftEmpty" class="participantLeftEmpty" aria-hidden="true">
-                  Select a participant to view their raw materials, products, and supply-chain details (read-only).
+                  Click "View" for detailed information.
                 </div>
                 <div id="conductorLeftShell" class="participantLeftShell is-hidden">
                   <div class="participantLeftSection">

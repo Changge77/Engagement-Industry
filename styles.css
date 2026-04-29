@@ -1750,9 +1750,11 @@ html:not(.participant-token-ok) body[data-survey-mode="participant"] #app {
 }
 
 .conductorWorkspace {
-  min-height: 100vh;
+  height: 100vh;
+  min-height: 0;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 .conductorWorkspace #app {
@@ -1760,15 +1762,16 @@ html:not(.participant-token-ok) body[data-survey-mode="participant"] #app {
   min-height: 0;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 /* Conductor: scrollable participant summary; export block pinned to bottom of sidebar */
 .conductorParticipantMirror {
-  flex: 1 1 auto;
-  min-height: 120px;
+  flex: 0 0 auto;
+  min-height: 0;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow: visible;
 }
 
 body[data-survey-mode="conductor"] .conductorParticipantMirror .participantProfileCard {
@@ -1776,16 +1779,16 @@ body[data-survey-mode="conductor"] .conductorParticipantMirror .participantProfi
 }
 
 body[data-survey-mode="conductor"] .conductorParticipantMirror .participantAsideContent {
-  flex: 1 1 auto;
+  flex: 0 0 auto;
   min-height: 0;
   overflow-x: hidden;
-  overflow-y: auto;
+  overflow-y: visible;
   -webkit-overflow-scrolling: touch;
   padding-right: 4px;
 }
 
 .conductorExportBlock {
-  flex-shrink: 0;
+  flex-shrink: 1;
   margin-top: 10px;
   padding-top: 12px;
   border-top: 1px solid var(--border);
@@ -1801,6 +1804,12 @@ body[data-survey-mode="conductor"] .conductorParticipantMirror .participantAside
   border-bottom: 1px solid var(--border);
   background: linear-gradient(180deg, #ffffff, #fff5f9);
   box-shadow: 0 4px 20px var(--shadow);
+}
+
+.conductorToolbar__title {
+  margin: 0 0 8px;
+  font-size: 1.85rem;
+  line-height: 1.15;
 }
 
 .conductorToolbar__row {
@@ -1886,8 +1895,93 @@ body[data-survey-mode="conductor"] .conductorParticipantMirror .participantAside
 }
 
 .participantFilterPanel {
-  padding-top: 4px;
+  padding: 8px 10px;
   margin-bottom: 4px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.8);
+  max-height: 50vh;
+  overflow: auto;
+}
+
+.manifestFilterGrid {
+  display: grid;
+  grid-template-columns: 1.25fr 1fr auto;
+  gap: 14px;
+  align-items: start;
+}
+
+.manifestFilterSection {
+  min-width: 0;
+}
+
+.manifestFilterSection__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.manifestFilterSection__title {
+  margin: 0;
+  font-size: 1.2rem;
+}
+
+.manifestFilterSection__showAll {
+  white-space: nowrap;
+}
+
+.manifestFilterSection__actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.manifestFeatureGroup {
+  margin-bottom: 8px;
+}
+
+.manifestFeatureGroup__header {
+  display: grid;
+  grid-template-columns: auto auto;
+  align-items: center;
+  justify-content: start;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
+.manifestFeatureGroup__title {
+  margin: 0;
+  font-size: 1rem;
+  color: var(--muted);
+}
+
+.manifestFeatureGroup__actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  justify-self: start;
+}
+
+.manifestFeatureGroup__actionBtn {
+  padding: 4px 8px;
+  font-size: 12px;
+  border-radius: 8px;
+}
+
+.manifestCheck {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0;
+  font-size: 13px;
+}
+
+.manifestAnalyzeActions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .participantPicker {
@@ -1942,7 +2036,7 @@ body[data-survey-mode="conductor"] .conductorParticipantMirror .participantAside
 
 .participantRow {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: 1fr auto auto;
   gap: 8px;
   align-items: center;
 }
@@ -1953,10 +2047,11 @@ body[data-survey-mode="conductor"] .conductorParticipantMirror .participantAside
   padding: 8px 10px;
   border-radius: 8px;
   border: 1px solid var(--border);
-  background: var(--panel2);
+  background: #fefefe;
   color: var(--text);
   font: inherit;
   cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
 }
 
 .participantRow__select:hover {
@@ -1964,14 +2059,45 @@ body[data-survey-mode="conductor"] .conductorParticipantMirror .participantAside
 }
 
 .participantRow__select.is-active {
-  border-color: var(--accent2);
-  box-shadow: 0 0 0 1px var(--accent2);
+  background: #fdeef3;
+  border-color: #e7b4c4;
+  box-shadow: none;
 }
 
 .participantRow__delete {
   padding: 8px 10px;
   border-radius: 8px;
   font-size: 13px;
+}
+
+body[data-survey-mode="conductor"] .topbar {
+  display: none;
+}
+
+body[data-survey-mode="conductor"] {
+  overflow: hidden;
+}
+
+body[data-survey-mode="conductor"] #app > main.layout {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+body[data-survey-mode="conductor"] .layout > aside.panel {
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+body[data-survey-mode="conductor"] .mapWrap {
+  min-height: 0;
+  height: 100%;
+}
+
+body[data-survey-mode="conductor"] #map {
+  min-height: 0;
+  height: 100%;
 }
 
 .participantList li {

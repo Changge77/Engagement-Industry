@@ -623,9 +623,9 @@ function supplyChainTransportKeyToRouteBaseKey(k) {
   return "small";
 }
 
-function getSupplyChainTransportRouteColor(modeKey) {
-  const base = supplyChainTransportKeyToRouteBaseKey(modeKey);
-  return getSegmentColor("current", { modeKey: base });
+function getSupplyChainTransportRouteColor(_modeKey, branchKind = BRANCH_KIND_RAW) {
+  if (branchKind === BRANCH_KIND_PRODUCT) return "#EBCF95";
+  return "#6DCCAD";
 }
 
 function formatSupplyChainTransportModeLabel(leg) {
@@ -737,7 +737,7 @@ function updateSupplyChainRoutePreview() {
   if (!dr.previewCursorLatLng || dr.points.length < 1) return;
   const last = dr.points[dr.points.length - 1];
   const cursor = dr.previewCursorLatLng;
-  const color = getSupplyChainTransportRouteColor(dr.modeKey);
+  const color = getSupplyChainTransportRouteColor(dr.modeKey, dr.branchKind);
   supplyChainRoutePreviewPolyline = L.polyline([last, cursor], {
     color,
     weight: 4,
@@ -841,7 +841,7 @@ function refreshSupplyChainRouteDraftVisuals() {
   layers.supplyChainDraft.clearLayers();
   const row = branchRow(dr.branchKind, dr.branchIndex);
   const d = normalizeSupplyChainDiagram(row?.supplyChainDiagram);
-  const color = getSupplyChainTransportRouteColor(dr.modeKey);
+  const color = getSupplyChainTransportRouteColor(dr.modeKey, dr.branchKind);
   const dashStyle = { color, weight: 5, opacity: 0.92, dashArray: "7 5" };
   if (dr.points.length >= 2) {
     L.polyline(dr.points, dashStyle).addTo(layers.supplyChainDraft);
@@ -1699,6 +1699,7 @@ function addSupplyChainBranchOriginMarkersToLocationsLayer(branches, itemLabels,
       icon: originSvg ? markerIconFromSvgInverted(originSvg) : markerIconColored("#14b8a6"),
       draggable: false
     });
+    mk._conductorPointType = "starting";
     mk.bindPopup(
       `${roleLine}<br/>${escapeHtml(itemLabel)}<br/>Where it originates: ${escapeHtml(originDesc)}`
     );
@@ -1731,8 +1732,9 @@ function addSupplyChainBranchRoutePolylinesToLayer(branches, itemLabels, kind) {
       if (!Array.isArray(pts) || pts.length < 2) continue;
       const latlngs = surveyPointsToLatLngs(pts);
       const modeKey = d.transportLegs[li]?.modeKey ?? "";
-      const color = getSupplyChainTransportRouteColor(modeKey);
+      const color = getSupplyChainTransportRouteColor(modeKey, kind);
       const line = L.polyline(latlngs, createModePolylineStyle(color, false));
+      line._conductorTransportMode = conductorTransportFilterKey(modeKey);
       const modeLab = formatSupplyChainTransportModeLabel(d.transportLegs[li]);
       line.bindPopup(
         `${escapeHtml(itemLabel)} · Transportation ${li + 1} (${escapeHtml(modeLab)}) · ${routeSuffix}`
@@ -1772,6 +1774,7 @@ function addSupplyChainBranchStoppingPointMarkersToLayer(branches, itemLabels, k
         ? (String(node?.otherDetail ?? "").trim() || "Others")
         : (locOpt?.label ?? locKey ?? "Stopping Point");
       const mk = L.marker(latlng, { icon, draggable: false });
+      mk._conductorPointType = "stopping";
       mk.bindPopup(`Stopping Point ${bLabel}<br/>${escapeHtml(itemLabel)}<br/>${escapeHtml(locDesc)}`);
       mk.on("click", (e) => {
         if (ui.scRouteDrawing) {
@@ -1803,6 +1806,7 @@ function addSupplyChainBranchDestinationMarkersToLayer(branches, itemLabels, kin
     const destDesc = formatSupplyChainDestinationDesc(d);
     const icon = markerIconForSupplyChainDestinationCategory(d);
     const mk = L.marker(latlng, { icon, draggable: false });
+    mk._conductorPointType = "destination";
     mk.bindPopup(
       `${roleLine}<br/>${escapeHtml(itemLabel)}<br/>Destination type: ${escapeHtml(destDesc)}`
     );
@@ -1836,6 +1840,7 @@ function tripFrequencySpeedMultiplier(branch) {
 
 function startRouteAnimationForLeg(latlngs, modeKey, speedMultiplier = 1) {
   const normalizedMode = normalizeTransportModeKey(modeKey);
+  const conductorModeKey = conductorTransportFilterKey(normalizedMode);
   const frontSrc = ANIMATION_MODE_ICONS[normalizedMode];
   if (!frontSrc || latlngs.length < 2) return null;
 
@@ -1853,6 +1858,7 @@ function startRouteAnimationForLeg(latlngs, modeKey, speedMultiplier = 1) {
       iconAnchor: [ICON_SIZE / 2, ICON_SIZE / 2]
     });
     const m = L.marker(latlngs[0], { icon, interactive: false, zIndexOffset: zOffset });
+    m._conductorTransportMode = conductorModeKey;
     m.addTo(layers.routeAnimations);
     return m;
   }
@@ -1987,6 +1993,7 @@ function rebuildFromState() {
         ? epsg2263XYToLatLng(loc.x, loc.y)
         : L.latLng(loc.lat, loc.lng);
     const marker = L.marker(latlng, { icon: markerIcon(loc.locationType, meta.color), draggable: false });
+    marker._conductorPointType = loc.locationType === "workplace" ? "company" : "starting";
     marker._snapLocId = loc.id;
     const companyNote =
       loc.locationType === "workplace" && state.industry?.companyName
@@ -2017,6 +2024,7 @@ function rebuildFromState() {
   for (const seg of state.routes.current.segments) {
     const latlngs = surveyPointsToLatLngs(seg.points);
     const line = L.polyline(latlngs, createModePolylineStyle(getSegmentColor("current", seg), false));
+    line._conductorTransportMode = conductorTransportFilterKey(seg.modeKey);
     line.bindPopup(buildSegmentPopup(seg, "Current"));
     layers.currentRoutes.addLayer(line);
   }
@@ -2024,6 +2032,7 @@ function rebuildFromState() {
   for (const seg of state.routes.ibx.segments) {
     const latlngs = surveyPointsToLatLngs(seg.points);
     const line = L.polyline(latlngs, createModePolylineStyle(getSegmentColor("ibx", seg), false));
+    line._conductorTransportMode = conductorTransportFilterKey(seg.modeKey);
     line.bindPopup(buildSegmentPopup(seg, "IBX Assumption"));
     layers.ibxRoutes.addLayer(line);
   }
@@ -2065,6 +2074,7 @@ function rebuildFromState() {
   }
 
   rebuildRouteAnimations();
+  applyConductorFeatureFilters();
 
   syncParticipantLeftPanel();
   syncConductorParticipantLeftPanel();
@@ -4939,8 +4949,7 @@ function syncConductorParticipantLeftPanel() {
     if (profileCard) profileCard.classList.add("is-hidden");
     emptyEl.classList.remove("is-hidden");
     emptyEl.setAttribute("aria-hidden", "false");
-    emptyEl.textContent =
-      "Select a participant to view their raw materials, products, and supply-chain details (read-only).";
+    emptyEl.textContent = 'Click "View" for detailed information.';
     shellEl.classList.add("is-hidden");
     if (mountEl) mountEl.innerHTML = "";
     if (placeholderEl) {
@@ -5734,6 +5743,42 @@ async function bootParticipant() {
 
 let conductorInitialized = false;
 let conductorParticipantsCache = [];
+const conductorSelectedParticipantIds = new Set();
+let conductorSelectionInitialized = false;
+const conductorParticipantStateCache = new Map();
+const conductorFeatureFilters = {
+  points: new Set(["company", "starting", "stopping", "destination"]),
+  transport: new Set(["train", "huge", "small", "others"])
+};
+const CONDUCTOR_POINT_FILTER_KEYS = ["company", "starting", "stopping", "destination"];
+const CONDUCTOR_TRANSPORT_FILTER_KEYS = ["train", "huge", "small", "others"];
+
+function conductorTransportFilterKey(modeKey) {
+  const m = String(modeKey ?? "").toLowerCase();
+  if (m === "train") return "train";
+  if (m === "huge" || m === "huge_truck") return "huge";
+  if (m === "small" || m === "small_truck") return "small";
+  return "others";
+}
+
+function setConductorFeatureFilterGroup(group, selectAll) {
+  const isPoint = group === "point";
+  const keys = isPoint ? CONDUCTOR_POINT_FILTER_KEYS : CONDUCTOR_TRANSPORT_FILTER_KEYS;
+  const target = isPoint ? conductorFeatureFilters.points : conductorFeatureFilters.transport;
+  target.clear();
+  if (selectAll) {
+    for (const key of keys) target.add(key);
+  }
+  document.querySelectorAll(`.manifestFilterCheckbox[data-filter-group="${group}"]`).forEach((el) => {
+    el.checked = selectAll;
+  });
+}
+
+function resetConductorFeatureFilters() {
+  setConductorFeatureFilterGroup("point", true);
+  setConductorFeatureFilterGroup("transport", true);
+  applyConductorFeatureFilters();
+}
 
 function matchesParticipantQuery(p, query) {
   const q = String(query || "").trim().toLowerCase();
@@ -5744,16 +5789,97 @@ function matchesParticipantQuery(p, query) {
   return label.includes(q) || id.includes(q) || ind.includes(q);
 }
 
+function defaultSurveyPayload() {
+  return {
+    industry: {
+      companyName: "",
+      roleKey: "",
+      roleOtherDetail: "",
+      goodsCategoryKeys: [],
+      goodsOtherDetail: "",
+      rawMaterials: [],
+      rawMaterialBranches: [],
+      products: [],
+      productBranches: []
+    },
+    locations: [],
+    routes: {
+      current: { segments: [], totalCostGold: 0 },
+      ibx: { segments: [], totalCostGold: 0 }
+    },
+    ibxLine: { loaded: false }
+  };
+}
+
+function cloneJson(value) {
+  return JSON.parse(JSON.stringify(value ?? null));
+}
+
+async function getConductorParticipantState(id, force = false) {
+  if (!force && conductorParticipantStateCache.has(id)) return conductorParticipantStateCache.get(id);
+  const res = await fetch(`/api/conductor/participants/${encodeURIComponent(id)}`);
+  if (!res.ok) throw new Error(`Could not load participant ${id}`);
+  const data = await res.json();
+  conductorParticipantStateCache.set(id, data);
+  return data;
+}
+
+function buildMergedConductorPayload(rows) {
+  const merged = defaultSurveyPayload();
+  for (const row of rows) {
+    const payload = row?.state;
+    if (!payload) continue;
+    merged.locations.push(...(cloneJson(payload.locations) ?? []));
+    merged.routes.current.segments.push(...(cloneJson(payload.routes?.current?.segments) ?? []));
+    merged.routes.ibx.segments.push(...(cloneJson(payload.routes?.ibx?.segments) ?? []));
+    const ind = payload.industry ?? {};
+    merged.industry.rawMaterials.push(...(cloneJson(ind.rawMaterials) ?? []));
+    merged.industry.rawMaterialBranches.push(...(cloneJson(ind.rawMaterialBranches) ?? []));
+    merged.industry.products.push(...(cloneJson(ind.products) ?? []));
+    merged.industry.productBranches.push(...(cloneJson(ind.productBranches) ?? []));
+  }
+  merged.routes.current.totalCostGold = merged.routes.current.segments.reduce(
+    (acc, seg) => acc + Number(seg?.costGold ?? 0),
+    0
+  );
+  merged.routes.ibx.totalCostGold = merged.routes.ibx.segments.reduce((acc, seg) => acc + Number(seg?.costGold ?? 0), 0);
+  return merged;
+}
+
+async function applyConductorSelectionToMap() {
+  if (SURVEY_MODE !== "conductor") return;
+  if (viewingParticipantId) return;
+  const ids = [...conductorSelectedParticipantIds];
+  if (ids.length === 0) {
+    applySurveyPayload(defaultSurveyPayload(), { persist: false });
+    rebuildFromState();
+    return;
+  }
+  const rows = await Promise.all(ids.map((id) => getConductorParticipantState(id)));
+  const merged = buildMergedConductorPayload(rows);
+  applySurveyPayload(merged, { persist: false });
+  rebuildFromState();
+}
+
+async function exitConductorViewMode() {
+  if (!viewingParticipantId) return;
+  viewingParticipantId = null;
+  viewingParticipantLabel = "";
+  const lbl = document.getElementById("conductorViewingLabel");
+  if (lbl) lbl.textContent = "";
+  await applyConductorSelectionToMap();
+}
+
 function renderFilteredParticipantList() {
   const ul = document.getElementById("participantList");
   const search = document.getElementById("participantSearch");
   if (!ul) return;
   const q = String(search?.value ?? "");
   const filtered = conductorParticipantsCache.filter((p) => matchesParticipantQuery(p, q));
-  populateParticipantDeleteList(ul, filtered, viewingParticipantId);
+  populateParticipantDeleteList(ul, filtered, viewingParticipantId, conductorSelectedParticipantIds);
 }
 
-function populateParticipantDeleteList(ul, list, currentId) {
+function populateParticipantDeleteList(ul, list, currentId, selectedIds) {
   ul.innerHTML = "";
   for (const p of list) {
     const li = document.createElement("li");
@@ -5763,11 +5889,24 @@ function populateParticipantDeleteList(ul, list, currentId) {
     const selectBtn = document.createElement("button");
     selectBtn.type = "button";
     selectBtn.className = "participantRow__select";
-    if (p.id === currentId) selectBtn.classList.add("is-active");
+    if (selectedIds.has(p.id)) selectBtn.classList.add("is-active");
     const t = new Date(p.updatedAt);
     const ind = p.industryCompany ? ` · ${p.industryCompany}` : "";
     selectBtn.textContent = `${p.label} · ${t.toLocaleString()} · ${p.counts.locations} loc / ${p.counts.currentSegments + p.counts.ibxSegments} seg${ind}`;
-    selectBtn.addEventListener("click", () => void selectConductorParticipant(p.id));
+    selectBtn.title = "Select participant for map filter";
+    selectBtn.addEventListener("click", async () => {
+      if (selectedIds.has(p.id)) selectedIds.delete(p.id);
+      else selectedIds.add(p.id);
+      if (viewingParticipantId) await exitConductorViewMode();
+      await applyConductorSelectionToMap();
+      renderFilteredParticipantList();
+    });
+
+    const viewBtn = document.createElement("button");
+    viewBtn.type = "button";
+    viewBtn.className = "ghostBtn participantRow__delete";
+    viewBtn.textContent = "View";
+    viewBtn.addEventListener("click", () => void selectConductorParticipant(p.id));
 
     const delBtn = document.createElement("button");
     delBtn.type = "button";
@@ -5780,10 +5919,88 @@ function populateParticipantDeleteList(ul, list, currentId) {
     });
 
     row.appendChild(selectBtn);
+    row.appendChild(viewBtn);
     row.appendChild(delBtn);
     li.appendChild(row);
     ul.appendChild(li);
   }
+}
+
+function setupConductorManifestFilters() {
+  if (SURVEY_MODE !== "conductor") return;
+  const showAll = document.getElementById("participantFilterShowAll");
+  if (showAll && !showAll.dataset.bound) {
+    showAll.dataset.bound = "1";
+    showAll.addEventListener("click", async () => {
+      conductorSelectedParticipantIds.clear();
+      for (const p of conductorParticipantsCache) conductorSelectedParticipantIds.add(p.id);
+      await exitConductorViewMode();
+      await applyConductorSelectionToMap();
+      renderFilteredParticipantList();
+    });
+  }
+  const hideAll = document.getElementById("participantFilterHideAll");
+  if (hideAll && !hideAll.dataset.bound) {
+    hideAll.dataset.bound = "1";
+    hideAll.addEventListener("click", async () => {
+      conductorSelectedParticipantIds.clear();
+      await exitConductorViewMode();
+      await applyConductorSelectionToMap();
+      renderFilteredParticipantList();
+    });
+  }
+  document.querySelectorAll(".manifestFilterCheckbox").forEach((el) => {
+    if (el.dataset.bound) return;
+    el.dataset.bound = "1";
+    el.addEventListener("change", () => {
+      const group = el.dataset.filterGroup;
+      const key = el.dataset.filterKey;
+      if (!group || !key) return;
+      const set = group === "point" ? conductorFeatureFilters.points : conductorFeatureFilters.transport;
+      if (el.checked) set.add(key);
+      else set.delete(key);
+      applyConductorFeatureFilters();
+    });
+  });
+  document.querySelectorAll("[data-feature-group][data-feature-action]").forEach((el) => {
+    if (el.dataset.bound) return;
+    el.dataset.bound = "1";
+    el.addEventListener("click", () => {
+      const group = el.dataset.featureGroup;
+      const action = el.dataset.featureAction;
+      if (!group || !action) return;
+      setConductorFeatureFilterGroup(group, action === "show-all");
+      applyConductorFeatureFilters();
+    });
+  });
+}
+
+function applyConductorFeatureFilters() {
+  if (SURVEY_MODE !== "conductor" || !layers) return;
+  const showPoint = (k) => conductorFeatureFilters.points.has(k);
+  const showTransport = (k) => conductorFeatureFilters.transport.has(k);
+
+  const applyMarker = (layer) => {
+    const kind = layer?._conductorPointType;
+    if (!kind || typeof layer.setOpacity !== "function") return;
+    layer.setOpacity(showPoint(kind) ? 1 : 0);
+  };
+  const applyLine = (layer) => {
+    const mode = layer?._conductorTransportMode;
+    if (!mode || typeof layer.setStyle !== "function") return;
+    layer.setStyle({ opacity: showTransport(mode) ? 0.95 : 0.02 });
+  };
+  const applyAnim = (layer) => {
+    const mode = layer?._conductorTransportMode;
+    if (!mode || typeof layer.setOpacity !== "function") return;
+    layer.setOpacity(showTransport(mode) ? 1 : 0);
+  };
+
+  [layers.locations, layers.supplyChainDestinations].forEach((grp) => grp?.eachLayer((layer) => applyMarker(layer)));
+  [layers.currentRoutes, layers.ibxRoutes, layers.supplyChainRoutes].forEach((grp) =>
+    grp?.eachLayer((layer) => applyLine(layer))
+  );
+  layers.routeAnimations?.eachLayer((layer) => applyAnim(layer));
 }
 
 async function deleteConductorParticipant(p) {
@@ -5800,27 +6017,10 @@ async function deleteConductorParticipant(p) {
   }
 
   if (viewingParticipantId === p.id) {
-    viewingParticipantId = null;
-    viewingParticipantLabel = "";
-    state.industry = {
-      companyName: "",
-      roleKey: "",
-      roleOtherDetail: "",
-      goodsCategoryKeys: [],
-      goodsOtherDetail: "",
-      rawMaterials: [],
-      rawMaterialBranches: []
-    };
-    state.locations = [];
-    state.routes = {
-      current: { segments: [], totalCostGold: 0 },
-      ibx: { segments: [], totalCostGold: 0 }
-    };
-    rebuildFromState();
-    uiUpdateStats();
-    const lbl = document.getElementById("conductorViewingLabel");
-    if (lbl) lbl.textContent = "";
+    await exitConductorViewMode();
   }
+  conductorParticipantStateCache.delete(p.id);
+  conductorSelectedParticipantIds.delete(p.id);
 
   await refreshParticipantList();
 }
@@ -5889,7 +6089,7 @@ function setupParticipantFilterToggle() {
     const open = !panel.classList.contains("is-hidden");
     btn.setAttribute("aria-expanded", String(open));
     btn.classList.toggle("participantFilterToggle--open", open);
-    if (label) label.textContent = open ? "Hide participant filter" : "Show participant filter";
+    if (label) label.textContent = "Advance";
   };
 
   btn.addEventListener("click", () => {
@@ -5914,9 +6114,18 @@ async function refreshParticipantList() {
   if (!res.ok) return;
   const list = await res.json();
   conductorParticipantsCache = Array.isArray(list) ? list : [];
+  const knownIds = new Set(conductorParticipantsCache.map((p) => p.id));
+  for (const id of [...conductorSelectedParticipantIds]) {
+    if (!knownIds.has(id)) conductorSelectedParticipantIds.delete(id);
+  }
+  if (!conductorSelectionInitialized) {
+    for (const p of conductorParticipantsCache) conductorSelectedParticipantIds.add(p.id);
+    conductorSelectionInitialized = true;
+  }
 
   renderFilteredParticipantList();
   setupParticipantFilterToggle();
+  setupConductorManifestFilters();
 
   if (search && !search.dataset.bound) {
     search.dataset.bound = "1";
@@ -5929,18 +6138,12 @@ async function refreshParticipantList() {
     });
   }
 
-  if (!viewingParticipantId && conductorParticipantsCache.length > 0) {
-    void selectConductorParticipant(conductorParticipantsCache[0].id);
-  }
+  if (!viewingParticipantId) await applyConductorSelectionToMap();
 }
 
 async function selectConductorParticipant(id) {
-  const res = await fetch(`/api/conductor/participants/${encodeURIComponent(id)}`);
-  if (!res.ok) {
-    window.alert("Could not load that participant.");
-    return;
-  }
-  const data = await res.json();
+  resetConductorFeatureFilters();
+  const data = await getConductorParticipantState(id, true);
   viewingParticipantId = data.id;
   viewingParticipantLabel = data.label;
   applySurveyPayload(data.state, { persist: false });
@@ -5990,11 +6193,12 @@ async function initConductorSurveyUi() {
   const hint = document.getElementById("mapHint");
   if (hint) {
     hint.textContent =
-      "Use the left panel to review the participant’s profile, raw materials, products, and supply-chain diagram (read-only). Open “Show participant filter” to select someone. The map shows all layers including IBX rail context.";
+      "Use the left panel to review the participant’s profile, raw materials, products, and supply-chain diagram (read-only). Open Advance to filter participants and map features.";
   }
   setupConductorCreateLink();
   initConductorLeftPanelOnce();
   syncConductorParticipantLeftPanel();
+  resetConductorFeatureFilters();
   // Map was created after #app became visible; still refresh tile/layout after flex settles.
   if (map) {
     requestAnimationFrame(() => {
