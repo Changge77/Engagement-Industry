@@ -910,11 +910,14 @@ function snapRouteToExistingLocation(latlng, locId) {
     const li = dr.legIndex;
     if (li < d.modalChangeNodes.length) {
       const scLocKey = normalizeModalChangeKey(d.modalChangeNodes[li]?.modalChangeKey);
-      const newLocType = SC_LOC_TO_LOCATION_TYPE[scLocKey];
-      if (newLocType) {
+      if (scLocKey && ORIGIN_TYPE_ICONS[scLocKey]) {
         const locIdx = state.locations.findIndex((l) => l.id === locId);
-        if (locIdx >= 0 && state.locations[locIdx].locationType !== newLocType) {
-          state.locations[locIdx] = { ...state.locations[locIdx], locationType: newLocType };
+        if (locIdx >= 0) {
+          const existing = state.locations[locIdx];
+          const extras = existing.extraRoles ?? [];
+          if (!extras.some((r) => r.scLocKey === scLocKey)) {
+            state.locations[locIdx] = { ...existing, extraRoles: [...extras, { scLocKey }] };
+          }
         }
       }
     }
@@ -1274,7 +1277,8 @@ const ui = {
   scRouteDrawing: null,
   /** Left panel: which branch list and row are shown in the detail area. */
   participantLeftPanelKind: BRANCH_KIND_RAW,
-  participantLeftPanelIndex: 0
+  participantLeftPanelIndex: 0,
+  animationsPaused: false
 };
 
 const state = {
@@ -1475,6 +1479,36 @@ function markerIconFromSvgInverted(svgSrc) {
     html: `<div style="width:32px;height:32px;border-radius:50%;background:#111;border:2px solid #111;display:flex;align-items:center;justify-content:center;box-shadow:0 1px 4px rgba(0,0,0,0.35)"><img src="${svgSrc}" style="width:27px;height:27px;filter:invert(1)" alt=""></div>`,
     iconSize: [32, 32],
     iconAnchor: [16, 16]
+  });
+}
+
+function markerIconCompound(primaryLocType, extraRoles) {
+  const SIZE = 26;
+  const INNER = 22;
+  const GAP = 4;
+  const primarySvg = LOCATION_TYPE_ICONS[primaryLocType];
+  const primaryLabel = LOCATION_TYPES[primaryLocType]?.label ?? "Location";
+  const roles = [
+    { svg: primarySvg, label: primaryLabel },
+    ...extraRoles
+      .map((r) => ({
+        svg: ORIGIN_TYPE_ICONS[r.scLocKey],
+        label: SUPPLY_CHAIN_LOCATION_OPTIONS.find((o) => o.key === r.scLocKey)?.label ?? r.scLocKey
+      }))
+      .filter((r) => r.svg)
+  ];
+  const totalWidth = roles.length * SIZE + (roles.length - 1) * GAP;
+  const iconsHtml = roles
+    .map(
+      (r) =>
+        `<div title="${escapeHtml(r.label)}" style="width:${SIZE}px;height:${SIZE}px;border-radius:50%;background:#fff;border:2px solid #ccc;display:flex;align-items:center;justify-content:center;box-shadow:0 1px 4px rgba(0,0,0,0.25)"><img src="${escapeHtml(r.svg)}" style="width:${INNER}px;height:${INNER}px" alt=""></div>`
+    )
+    .join("");
+  return L.divIcon({
+    className: "",
+    html: `<div style="display:flex;gap:${GAP}px;align-items:center">${iconsHtml}</div>`,
+    iconSize: [totalWidth, SIZE],
+    iconAnchor: [Math.round(totalWidth / 2), Math.round(SIZE / 2)]
   });
 }
 
@@ -1744,47 +1778,91 @@ function addSupplyChainBranchRoutePolylinesToLayer(branches, itemLabels, kind) {
   }
 }
 
-/** Stopping points (diagram B nodes): icon from location type; position from last point of each intermediate leg. */
-function addSupplyChainBranchStoppingPointMarkersToLayer(branches, itemLabels, kind) {
+/** Stopping points (diagram B nodes): collect all across branches, group by position, render compound icons where co-located. */
+function addAllSupplyChainStoppingPointMarkersToLayer() {
   if (!layers?.supplyChainDestinations) return;
-  const isProduct = kind === BRANCH_KIND_PRODUCT;
-  const fallback = isProduct ? "Product" : "Material";
-  const arr = Array.isArray(branches) ? branches : [];
-  const labels = Array.isArray(itemLabels) ? itemLabels : [];
-  for (let bi = 0; bi < arr.length; bi++) {
-    const b = arr[bi];
-    if (!b || b.originCategoryKey === RAW_MATERIAL_ORIGIN_SKIPPED_KEY) continue;
-    const d = normalizeSupplyChainDiagram(b.supplyChainDiagram ?? defaultSupplyChainDiagram());
-    const routes = normalizeSupplyChainTransportRoutesForBranch(b.supplyChainTransportRoutes, b.supplyChainDiagram);
-    const itemLabel = String(labels[bi] ?? "").trim() || `${fallback} ${bi + 1}`;
-    for (let ni = 0; ni < d.modalChangeNodes.length; ni++) {
-      const pts = routes[ni]?.points;
-      if (!Array.isArray(pts) || pts.length < 1) continue;
-      const last = pts[pts.length - 1];
-      const latlng = epsg2263XYToLatLng(last[0], last[1]);
-      const node = d.modalChangeNodes[ni];
-      const locKey = normalizeModalChangeKey(node?.modalChangeKey);
-      const iconSrc = (locKey && locKey !== "other")
-        ? (ORIGIN_TYPE_ICONS[locKey] ?? ORIGIN_TYPE_ICONS.storage_facility)
-        : ORIGIN_TYPE_ICONS.storage_facility;
-      const icon = markerIconFromSvg(iconSrc);
-      const bLabel = d.modalChangeNodes.length <= 1 ? "B" : `B${ni + 1}`;
-      const locOpt = SUPPLY_CHAIN_LOCATION_OPTIONS.find((o) => o.key === locKey);
-      const locDesc = locKey === "other"
-        ? (String(node?.otherDetail ?? "").trim() || "Others")
-        : (locOpt?.label ?? locKey ?? "Stopping Point");
-      const mk = L.marker(latlng, { icon, draggable: false });
-      mk._conductorPointType = "stopping";
-      mk.bindPopup(`Stopping Point ${bLabel}<br/>${escapeHtml(itemLabel)}<br/>${escapeHtml(locDesc)}`);
-      mk.on("click", (e) => {
-        if (ui.scRouteDrawing) {
-          L.DomEvent.stopPropagation(e);
-          mk.closePopup();
-          snapRouteToExistingLocation(mk.getLatLng(), null);
-        }
-      });
-      layers.supplyChainDestinations.addLayer(mk);
+
+  const collected = [];
+  for (const [branches, itemLabels, kind] of [
+    [state.industry?.rawMaterialBranches, state.industry?.rawMaterials, BRANCH_KIND_RAW],
+    [state.industry?.productBranches, state.industry?.products, BRANCH_KIND_PRODUCT]
+  ]) {
+    const isProduct = kind === BRANCH_KIND_PRODUCT;
+    const fallback = isProduct ? "Product" : "Material";
+    const arr = Array.isArray(branches) ? branches : [];
+    const labels = Array.isArray(itemLabels) ? itemLabels : [];
+    for (let bi = 0; bi < arr.length; bi++) {
+      const b = arr[bi];
+      if (!b || b.originCategoryKey === RAW_MATERIAL_ORIGIN_SKIPPED_KEY) continue;
+      const d = normalizeSupplyChainDiagram(b.supplyChainDiagram ?? defaultSupplyChainDiagram());
+      const routes = normalizeSupplyChainTransportRoutesForBranch(b.supplyChainTransportRoutes, b.supplyChainDiagram);
+      const itemLabel = String(labels[bi] ?? "").trim() || `${fallback} ${bi + 1}`;
+      for (let ni = 0; ni < d.modalChangeNodes.length; ni++) {
+        const pts = routes[ni]?.points;
+        if (!Array.isArray(pts) || pts.length < 1) continue;
+        const last = pts[pts.length - 1];
+        const latlng = epsg2263XYToLatLng(last[0], last[1]);
+        const node = d.modalChangeNodes[ni];
+        const locKey = normalizeModalChangeKey(node?.modalChangeKey);
+        const locOpt = SUPPLY_CHAIN_LOCATION_OPTIONS.find((o) => o.key === locKey);
+        const locDesc = locKey === "other"
+          ? (String(node?.otherDetail ?? "").trim() || "Others")
+          : (locOpt?.label ?? locKey ?? "Stopping Point");
+        const iconSrc = (locKey && locKey !== "other")
+          ? (ORIGIN_TYPE_ICONS[locKey] ?? ORIGIN_TYPE_ICONS.storage_facility)
+          : ORIGIN_TYPE_ICONS.storage_facility;
+        collected.push({ latlng, iconSrc, locDesc, itemLabel });
+      }
     }
+  }
+
+  // Group by geographic position
+  const groups = new Map();
+  for (const pt of collected) {
+    const key = `${pt.latlng.lat.toFixed(6)},${pt.latlng.lng.toFixed(6)}`;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(pt);
+  }
+
+  const SIZE = 26;
+  const INNER = 22;
+  const GAP = 4;
+
+  for (const group of groups.values()) {
+    const latlng = group[0].latlng;
+    let icon;
+    if (group.length === 1) {
+      icon = markerIconFromSvg(group[0].iconSrc);
+    } else {
+      const totalWidth = group.length * SIZE + (group.length - 1) * GAP;
+      const iconsHtml = group
+        .map(
+          (pt) =>
+            `<div title="${escapeHtml(pt.itemLabel + " — " + pt.locDesc)}" style="width:${SIZE}px;height:${SIZE}px;border-radius:50%;background:#fff;border:2px solid #ccc;display:flex;align-items:center;justify-content:center;box-shadow:0 1px 4px rgba(0,0,0,0.25)"><img src="${escapeHtml(pt.iconSrc)}" style="width:${INNER}px;height:${INNER}px" alt=""></div>`
+        )
+        .join("");
+      icon = L.divIcon({
+        className: "",
+        html: `<div style="display:flex;gap:${GAP}px;align-items:center">${iconsHtml}</div>`,
+        iconSize: [totalWidth, SIZE],
+        iconAnchor: [Math.round(totalWidth / 2), Math.round(SIZE / 2)]
+      });
+    }
+    const popupLines = group.map((pt) => `${escapeHtml(pt.itemLabel)} — ${escapeHtml(pt.locDesc)}`).join("<br/>");
+    const mk = L.marker(latlng, { icon, draggable: false });
+    mk._conductorPointType = "stopping";
+    mk.bindPopup(group.length === 1
+      ? `Stopping Point<br/>${popupLines}`
+      : `Stopping Points<br/>${popupLines}`
+    );
+    mk.on("click", (e) => {
+      if (ui.scRouteDrawing) {
+        L.DomEvent.stopPropagation(e);
+        mk.closePopup();
+        snapRouteToExistingLocation(mk.getLatLng(), null);
+      }
+    });
+    layers.supplyChainDestinations.addLayer(mk);
   }
 }
 
@@ -1953,6 +2031,45 @@ function startRouteAnimationForLeg(latlngs, modeKey, speedMultiplier = 1) {
   };
 }
 
+function placeStaticRouteIcon(latlngs, modeKey) {
+  const normalizedMode = normalizeTransportModeKey(modeKey);
+  const iconSrc = ANIMATION_MODE_ICONS[normalizedMode];
+  if (!iconSrc || latlngs.length < 2) return;
+  const ICON_SIZE = 56;
+  const midIdx = Math.floor(latlngs.length / 2);
+  const midLatLng = latlngs[midIdx];
+  const ll1 = latlngs[Math.max(0, midIdx - 1)];
+  const ll2 = latlngs[Math.min(latlngs.length - 1, midIdx + 1)];
+  const bearing = turf.bearing(
+    turf.point([ll1.lng, ll1.lat]),
+    turf.point([ll2.lng, ll2.lat])
+  );
+  const icon = L.divIcon({
+    className: "",
+    html: `<img class="routeAnimIcon" src="${escapeHtml(iconSrc)}" alt="" aria-hidden="true" style="transform:rotate(${bearing - 90}deg)">`,
+    iconSize: [ICON_SIZE, ICON_SIZE],
+    iconAnchor: [ICON_SIZE / 2, ICON_SIZE / 2]
+  });
+  L.marker(midLatLng, { icon, interactive: false, zIndexOffset: 200 }).addTo(layers.routeAnimations);
+}
+
+function createAnimToggleButton() {
+  const container = map.getContainer();
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "animToggleBtn";
+  btn.setAttribute("aria-label", "Toggle route animations");
+  btn.title = "Pause Animation";
+  btn.innerHTML = `<img src="Icons/General/Animation.svg" alt="" aria-hidden="true"><span class="animToggleBtn__x"></span>`;
+  L.DomEvent.disableClickPropagation(btn);
+  btn.addEventListener("click", () => {
+    ui.animationsPaused = !ui.animationsPaused;
+    btn.classList.toggle("animToggleBtn--paused", ui.animationsPaused);
+    rebuildRouteAnimations();
+  });
+  container.appendChild(btn);
+}
+
 function rebuildRouteAnimations() {
   stopRouteAnimations();
   if (!map || !layers?.routeAnimations) return;
@@ -1971,8 +2088,12 @@ function rebuildRouteAnimations() {
         const latlngs = surveyPointsToLatLngs(pts);
         if (latlngs.length < 2) continue;
         const modeKey = d.transportLegs[li]?.modeKey ?? "";
-        const cancel = startRouteAnimationForLeg(latlngs, modeKey, tripFrequencySpeedMultiplier(br));
-        if (cancel) routeAnimationHandles.push(cancel);
+        if (ui.animationsPaused) {
+          placeStaticRouteIcon(latlngs, modeKey);
+        } else {
+          const cancel = startRouteAnimationForLeg(latlngs, modeKey, tripFrequencySpeedMultiplier(br));
+          if (cancel) routeAnimationHandles.push(cancel);
+        }
       }
     }
   }
@@ -1992,14 +2113,24 @@ function rebuildFromState() {
       typeof loc.x === "number" && typeof loc.y === "number"
         ? epsg2263XYToLatLng(loc.x, loc.y)
         : L.latLng(loc.lat, loc.lng);
-    const marker = L.marker(latlng, { icon: markerIcon(loc.locationType, meta.color), draggable: false });
+    const extras = loc.extraRoles?.length ? loc.extraRoles : null;
+    const icon = extras ? markerIconCompound(loc.locationType, extras) : markerIcon(loc.locationType, meta.color);
+    const marker = L.marker(latlng, { icon, draggable: false });
     marker._conductorPointType = loc.locationType === "workplace" ? "company" : "starting";
     marker._snapLocId = loc.id;
     const companyNote =
       loc.locationType === "workplace" && state.industry?.companyName
         ? `<br/>${escapeHtml(state.industry.companyName)}`
         : "";
-    marker.bindPopup(`${meta.label}${companyNote}<br/>ID: ${loc.id}`);
+    if (extras) {
+      const roleLines = [
+        meta.label + (companyNote ? " — " + escapeHtml(state.industry.companyName) : ""),
+        ...extras.map((r) => SUPPLY_CHAIN_LOCATION_OPTIONS.find((o) => o.key === r.scLocKey)?.label ?? r.scLocKey)
+      ].join("<br/>");
+      marker.bindPopup(`${roleLines}<br/>ID: ${loc.id}`);
+    } else {
+      marker.bindPopup(`${meta.label}${companyNote}<br/>ID: ${loc.id}`);
+    }
     marker.on("click", (e) => {
       if (ui.scRouteDrawing) {
         L.DomEvent.stopPropagation(e);
@@ -2048,16 +2179,7 @@ function rebuildFromState() {
     BRANCH_KIND_PRODUCT
   );
 
-  addSupplyChainBranchStoppingPointMarkersToLayer(
-    state.industry?.rawMaterialBranches,
-    state.industry?.rawMaterials,
-    BRANCH_KIND_RAW
-  );
-  addSupplyChainBranchStoppingPointMarkersToLayer(
-    state.industry?.productBranches,
-    state.industry?.products,
-    BRANCH_KIND_PRODUCT
-  );
+  addAllSupplyChainStoppingPointMarkersToLayer();
   addSupplyChainBranchDestinationMarkersToLayer(
     state.industry?.rawMaterialBranches,
     state.industry?.rawMaterials,
@@ -2093,6 +2215,8 @@ function uiUpdateStats() {
   set("exportLocationsCount", String(state.locations.length));
   set("exportCurrentSegments", String(state.routes.current.segments.length));
   set("exportIbXSegments", String(state.routes.ibx.segments.length));
+
+  if (SURVEY_MODE === "conductor" && conductorOpenCard === "summary") updateCondCardSummaryStats();
 
   if (SURVEY_MODE === "participant") {
     const profileCard = document.getElementById("participantProfileCard");
@@ -3200,6 +3324,8 @@ function setupMap() {
   layers.routeAnimations.addTo(map);
   layers.ibxRoutes.addTo(map);
   // IBX line/stations: always on map for conductor; standalone toggles via setStep (ibxRoutes step).
+
+  createAnimToggleButton();
 
   map.on("mousemove", (e) => {
     if (readOnly) return;
@@ -4934,28 +5060,25 @@ function syncParticipantLeftPanel() {
  */
 function syncConductorParticipantLeftPanel() {
   if (SURVEY_MODE !== "conductor") return;
-  const profileCard = document.getElementById("conductorProfileCard");
-  const emptyEl = document.getElementById("conductorLeftEmpty");
-  const shellEl = document.getElementById("conductorLeftShell");
+
   const pillsEl = document.getElementById("conductorRawMaterialPills");
   const productPillsEl = document.getElementById("conductorProductPills");
-  const detailEl = document.getElementById("conductorLeftDetail");
-  const detailName = document.getElementById("conductorLeftDetailName");
-  const placeholderEl = document.getElementById("conductorLeftDetailPlaceholder");
-  const mountEl = document.getElementById("conductorLeftDiagramMount");
-  if (!emptyEl || !shellEl) return;
+  const emptyEl = document.getElementById("conductorLeftEmpty");
+  const rawPlaceholder = document.getElementById("conductorLeftDetailPlaceholder");
+  const rawMountEl = document.getElementById("conductorLeftDiagramMount");
+  const productPlaceholder = document.getElementById("conductorProductDetailPlaceholder");
+  const productMountEl = document.getElementById("conductorProductDiagramMount");
+
+  updateCondCardParticipantSummary();
 
   if (!viewingParticipantId) {
-    if (profileCard) profileCard.classList.add("is-hidden");
-    emptyEl.classList.remove("is-hidden");
-    emptyEl.setAttribute("aria-hidden", "false");
-    emptyEl.textContent = 'Click "View" for detailed information.';
-    shellEl.classList.add("is-hidden");
-    if (mountEl) mountEl.innerHTML = "";
-    if (placeholderEl) {
-      placeholderEl.classList.add("is-hidden");
-      placeholderEl.textContent = "";
-    }
+    if (pillsEl) pillsEl.innerHTML = "";
+    if (productPillsEl) productPillsEl.innerHTML = "";
+    if (rawMountEl) rawMountEl.innerHTML = "";
+    if (productMountEl) productMountEl.innerHTML = "";
+    if (emptyEl) { emptyEl.textContent = 'Select a participant using "View" to see their data.'; emptyEl.classList.remove("is-hidden"); }
+    if (rawPlaceholder) rawPlaceholder.classList.add("is-hidden");
+    if (productPlaceholder) productPlaceholder.classList.add("is-hidden");
     return;
   }
 
@@ -4963,24 +5086,6 @@ function syncConductorParticipantLeftPanel() {
   const prods = state.industry.products ?? [];
   const hasMaterials = participantRawMaterialsIsComplete();
   const hasProducts = participantProductsIsComplete();
-
-  if (!hasMaterials) {
-    emptyEl.classList.remove("is-hidden");
-    emptyEl.setAttribute("aria-hidden", "false");
-    emptyEl.textContent =
-      "This participant has not completed the raw materials step yet — nothing to show in the supply-chain panel.";
-    shellEl.classList.add("is-hidden");
-    if (mountEl) mountEl.innerHTML = "";
-    if (placeholderEl) {
-      placeholderEl.classList.add("is-hidden");
-      placeholderEl.textContent = "";
-    }
-    return;
-  }
-
-  emptyEl.classList.add("is-hidden");
-  emptyEl.setAttribute("aria-hidden", "true");
-  shellEl.classList.remove("is-hidden");
 
   if (ui.participantLeftPanelKind === BRANCH_KIND_RAW && mats.length > 0) {
     if (ui.participantLeftPanelIndex < 0 || ui.participantLeftPanelIndex >= mats.length) {
@@ -4993,116 +5098,52 @@ function syncConductorParticipantLeftPanel() {
     }
   }
 
+  // Raw material pills (in card header)
   let pillsHtml = "";
   for (let i = 0; i < mats.length; i++) {
     const label = String(mats[i] ?? "").trim() || `Material ${i + 1}`;
-    const active =
-      ui.participantLeftPanelKind === BRANCH_KIND_RAW && ui.participantLeftPanelIndex === i ? " is-active" : "";
-    pillsHtml += `<button type="button" class="participantPill${active}" data-conductor-rm-index="${i}" role="tab" aria-selected="${
-      ui.participantLeftPanelKind === BRANCH_KIND_RAW && ui.participantLeftPanelIndex === i ? "true" : "false"
-    }">${escapeHtml(label)}</button>`;
+    const isActive = ui.participantLeftPanelKind === BRANCH_KIND_RAW && ui.participantLeftPanelIndex === i;
+    pillsHtml += `<button type="button" class="participantPill${isActive ? " is-active" : ""}" data-conductor-rm-index="${i}" role="tab" aria-selected="${isActive}">${escapeHtml(label)}</button>`;
   }
   if (pillsEl) pillsEl.innerHTML = pillsHtml;
 
+  // Product pills (in card header)
   if (productPillsEl) {
     if (!hasProducts) {
-      productPillsEl.innerHTML = `<span class="participantPill participantPill--muted">Products appear here after the participant lists them.</span>`;
+      productPillsEl.innerHTML = "";
     } else {
       ensureProductBranchesAligned();
       let ph = "";
       for (let i = 0; i < prods.length; i++) {
         const label = String(prods[i] ?? "").trim() || `Product ${i + 1}`;
-        const active =
-          ui.participantLeftPanelKind === BRANCH_KIND_PRODUCT && ui.participantLeftPanelIndex === i
-            ? " is-active"
-            : "";
-        ph += `<button type="button" class="participantPill${active}" data-conductor-product-index="${i}" role="tab" aria-selected="${
-          ui.participantLeftPanelKind === BRANCH_KIND_PRODUCT && ui.participantLeftPanelIndex === i ? "true" : "false"
-        }">${escapeHtml(label)}</button>`;
+        const isActive = ui.participantLeftPanelKind === BRANCH_KIND_PRODUCT && ui.participantLeftPanelIndex === i;
+        ph += `<button type="button" class="participantPill${isActive ? " is-active" : ""}" data-conductor-product-index="${i}" role="tab" aria-selected="${isActive}">${escapeHtml(label)}</button>`;
       }
       productPillsEl.innerHTML = ph;
     }
   }
 
-  const kind = ui.participantLeftPanelKind;
-  const items = kind === BRANCH_KIND_PRODUCT ? prods : mats;
-  const sel = ui.participantLeftPanelIndex;
-
-  if (kind === BRANCH_KIND_PRODUCT && !hasProducts) {
-    if (detailEl) detailEl.classList.add("is-hidden");
-    if (mountEl) mountEl.innerHTML = "";
-    return;
-  }
-
-  if (sel == null || sel < 0 || sel >= items.length) {
-    if (detailEl) detailEl.classList.add("is-hidden");
-    if (mountEl) mountEl.innerHTML = "";
-    if (placeholderEl) placeholderEl.classList.add("is-hidden");
-    return;
-  }
-
-  if (detailEl) detailEl.classList.remove("is-hidden");
-  const itemLabel =
-    String(items[sel] ?? "").trim() ||
-    (kind === BRANCH_KIND_PRODUCT ? `Product ${sel + 1}` : `Material ${sel + 1}`);
-  if (detailName) detailName.textContent = itemLabel;
-
-  const br = branchRow(kind, sel);
-  if (!br) {
-    if (mountEl) mountEl.innerHTML = "";
-    return;
-  }
-
-  if (
-    rawMaterialSupplyChainBranchNeedsIntroGate(br) ||
-    rawMaterialOriginBranchNeedsCategoryGate(br) ||
-    rawMaterialOriginBranchNeedsMap(br)
-  ) {
-    if (mountEl) mountEl.innerHTML = "";
-    if (placeholderEl) {
-      placeholderEl.classList.remove("is-hidden");
-      placeholderEl.textContent =
-        "The participant has not finished intro, origin, and map steps for this item — no diagram yet.";
+  // Raw materials card body content
+  if (!hasMaterials) {
+    if (emptyEl) { emptyEl.textContent = "This participant has not completed the raw materials step yet."; emptyEl.classList.remove("is-hidden"); }
+    if (rawMountEl) rawMountEl.innerHTML = "";
+    if (rawPlaceholder) rawPlaceholder.classList.add("is-hidden");
+  } else {
+    if (emptyEl) emptyEl.classList.add("is-hidden");
+    if (ui.participantLeftPanelKind === BRANCH_KIND_RAW) {
+      _renderConductorDiagram(BRANCH_KIND_RAW, "conductorLeftDiagramMount", rawPlaceholder, rawMountEl);
     }
-    return;
   }
 
-  if (br.originCategoryKey === RAW_MATERIAL_ORIGIN_SKIPPED_KEY) {
-    if (mountEl) mountEl.innerHTML = "";
-    if (placeholderEl) {
-      placeholderEl.classList.remove("is-hidden");
-      placeholderEl.textContent =
-        kind === BRANCH_KIND_PRODUCT
-          ? "This product was skipped — no supply chain diagram."
-          : "This raw material was skipped — no supply chain diagram.";
+  // Products card body content
+  if (!hasProducts) {
+    if (productMountEl) productMountEl.innerHTML = "";
+    if (productPlaceholder) productPlaceholder.classList.add("is-hidden");
+  } else {
+    if (ui.participantLeftPanelKind === BRANCH_KIND_PRODUCT) {
+      _renderConductorDiagram(BRANCH_KIND_PRODUCT, "conductorProductDiagramMount", productPlaceholder, productMountEl);
     }
-    return;
   }
-
-  if (rawMaterialSupplyChainBranchNeedsDiagramGate(br)) {
-    if (mountEl) mountEl.innerHTML = "";
-    if (placeholderEl) {
-      placeholderEl.classList.remove("is-hidden");
-      placeholderEl.textContent =
-        "The participant has not confirmed the supply chain in the popup for this item — no diagram here yet.";
-    }
-    return;
-  }
-
-  if (placeholderEl) {
-    placeholderEl.classList.add("is-hidden");
-    placeholderEl.textContent = "";
-  }
-
-  renderSupplyChainDiagramMount(sel, {
-    readOnly: true,
-    mountId: "conductorLeftDiagramMount",
-    branchKind: kind
-  });
-
-  requestAnimationFrame(() => {
-    positionSupplyChainDiagramTrack(document.getElementById("conductorLeftDiagramMount"));
-  });
 }
 
 function openSupplyChainDiagramGate(kind, index) {
@@ -5336,6 +5377,179 @@ function initParticipantLeftPanelOnce() {
   });
 }
 
+/* ── Conductor collapsible card system ───────────────────────── */
+
+let conductorOpenCard = null;
+
+function openCondCard(cardId) {
+  const ids = ["participant", "raw", "product", "summary"];
+  for (const id of ids) {
+    const card = document.getElementById(`condCard_${id}`);
+    if (!card) continue;
+    card.classList.toggle("condCard--open", id === cardId);
+  }
+  conductorOpenCard = cardId;
+}
+
+function initCondCards() {
+  if (SURVEY_MODE !== "conductor") return;
+  const cardsEl = document.querySelector(".conductorCards");
+  if (!cardsEl) return;
+
+  cardsEl.addEventListener("click", (e) => {
+    // Pills in the preview handle their own click (openCondCard + sync), don't double-fire
+    if (e.target.closest("[data-conductor-rm-index], [data-conductor-product-index]")) return;
+    // Ignore clicks inside an expanded body
+    if (e.target.closest(".condCard__body")) return;
+
+    const card = e.target.closest(".condCard");
+    if (!card) return;
+    const cardId = card.id.replace("condCard_", "");
+    const isOpen = card.classList.contains("condCard--open");
+
+    if (isOpen) {
+      card.classList.remove("condCard--open");
+      conductorOpenCard = null;
+    } else {
+      openCondCard(cardId);
+      if (cardId === "raw" || cardId === "product") syncConductorParticipantLeftPanel();
+      if (cardId === "summary") updateCondCardSummaryStats();
+    }
+  });
+}
+
+function updateCondCardParticipantSummary() {
+  const company = String(state.industry?.companyName ?? "").trim();
+  const role = formatParticipantRoleSummary(state.industry);
+  const goods = formatParticipantGoodsSummary(state.industry);
+
+  const setChip = (id, text) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (text) {
+      el.textContent = text;
+      el.style.display = "";
+    } else {
+      el.textContent = "";
+      el.style.display = "none";
+    }
+  };
+  setChip("condCardSummaryCompany", company);
+  setChip("condCardSummaryRole", role);
+  setChip("condCardSummaryProducts", goods);
+
+  const dateEl = document.getElementById("condCardDate");
+  if (dateEl) {
+    if (viewingParticipantId) {
+      const p = conductorParticipantsCache.find((x) => x.id === viewingParticipantId);
+      dateEl.textContent = p?.updatedAt ? `Last updated: ${new Date(p.updatedAt).toLocaleString()}` : "";
+    } else {
+      dateEl.textContent = "";
+    }
+  }
+}
+
+function updateCondCardSummaryStats() {
+  const el = document.getElementById("conductorSummaryStats");
+  const previewEl = document.getElementById("condCardSummaryPreview");
+
+  const locCounts = {};
+  for (const loc of state.locations ?? []) {
+    const t = loc.type ?? "other";
+    locCounts[t] = (locCounts[t] ?? 0) + 1;
+  }
+
+  const milesByMode = {};
+  for (const seg of state.routes?.current?.segments ?? []) {
+    const mode = seg.modeKey ?? "other";
+    milesByMode[mode] = (milesByMode[mode] ?? 0) + (Number(seg.lengthMiles) || 0);
+  }
+
+  const totalLocs = Object.values(locCounts).reduce((a, b) => a + b, 0);
+  const totalModes = Object.keys(milesByMode).length;
+
+  if (previewEl) {
+    previewEl.textContent =
+      totalLocs > 0
+        ? `${totalLocs} location${totalLocs !== 1 ? "s" : ""} · ${totalModes} mode${totalModes !== 1 ? "s" : ""}`
+        : "Select a participant to view stats";
+  }
+
+  if (!el) return;
+  let html = "";
+  for (const [type, count] of Object.entries(locCounts)) {
+    const label = LOCATION_TYPES[type]?.label ?? type;
+    html += `<div class="condCard__statRow"><span class="condCard__statLabel">${escapeHtml(label)}</span><span class="condCard__statValue">${count} loc.</span></div>`;
+  }
+  for (const [mode, miles] of Object.entries(milesByMode)) {
+    const label = SUPPLY_CHAIN_TRANSPORT_MODE_OPTIONS.find((o) => o.key === mode)?.label ?? mode;
+    html += `<div class="condCard__statRow"><span class="condCard__statLabel">${escapeHtml(label)}</span><span class="condCard__statValue">${miles.toFixed(1)} mi</span></div>`;
+  }
+  if (!html) html = `<p class="condCard__emptyMsg">No data to summarise yet.</p>`;
+  el.innerHTML = html;
+}
+
+/* ── Conductor diagram rendering helper ──────────────────────── */
+
+function _renderConductorDiagram(kind, mountId, placeholderEl, mountEl) {
+  const items = kind === BRANCH_KIND_PRODUCT ? (state.industry.products ?? []) : (state.industry.rawMaterials ?? []);
+  const sel = ui.participantLeftPanelIndex;
+
+  if (sel == null || sel < 0 || sel >= items.length) {
+    if (mountEl) mountEl.innerHTML = "";
+    if (placeholderEl) placeholderEl.classList.add("is-hidden");
+    return;
+  }
+
+  const br = branchRow(kind, sel);
+  if (!br) {
+    if (mountEl) mountEl.innerHTML = "";
+    return;
+  }
+
+  if (
+    rawMaterialSupplyChainBranchNeedsIntroGate(br) ||
+    rawMaterialOriginBranchNeedsCategoryGate(br) ||
+    rawMaterialOriginBranchNeedsMap(br)
+  ) {
+    if (mountEl) mountEl.innerHTML = "";
+    if (placeholderEl) {
+      placeholderEl.classList.remove("is-hidden");
+      placeholderEl.textContent = "The participant has not finished the supply-chain steps for this item yet.";
+    }
+    return;
+  }
+
+  if (br.originCategoryKey === RAW_MATERIAL_ORIGIN_SKIPPED_KEY) {
+    if (mountEl) mountEl.innerHTML = "";
+    if (placeholderEl) {
+      placeholderEl.classList.remove("is-hidden");
+      placeholderEl.textContent =
+        kind === BRANCH_KIND_PRODUCT ? "This product was skipped." : "This raw material was skipped.";
+    }
+    return;
+  }
+
+  if (rawMaterialSupplyChainBranchNeedsDiagramGate(br)) {
+    if (mountEl) mountEl.innerHTML = "";
+    if (placeholderEl) {
+      placeholderEl.classList.remove("is-hidden");
+      placeholderEl.textContent = "The participant has not confirmed the supply chain for this item yet.";
+    }
+    return;
+  }
+
+  if (placeholderEl) {
+    placeholderEl.classList.add("is-hidden");
+    placeholderEl.textContent = "";
+  }
+
+  renderSupplyChainDiagramMount(sel, { readOnly: true, mountId, branchKind: kind });
+  requestAnimationFrame(() => {
+    positionSupplyChainDiagramTrack(document.getElementById(mountId));
+  });
+}
+
 function initConductorLeftPanelOnce() {
   if (SURVEY_MODE !== "conductor" || document.body.dataset.conductorLeftPanelBound === "1") return;
   const pills = document.getElementById("conductorRawMaterialPills");
@@ -5345,19 +5559,23 @@ function initConductorLeftPanelOnce() {
   pills?.addEventListener("click", (e) => {
     const btn = e.target.closest("[data-conductor-rm-index]");
     if (!btn) return;
+    e.stopPropagation();
     const i = Number(btn.getAttribute("data-conductor-rm-index"));
     if (Number.isNaN(i)) return;
     ui.participantLeftPanelKind = BRANCH_KIND_RAW;
     ui.participantLeftPanelIndex = i;
+    openCondCard("raw");
     syncConductorParticipantLeftPanel();
   });
   productPills?.addEventListener("click", (e) => {
     const btn = e.target.closest("[data-conductor-product-index]");
     if (!btn) return;
+    e.stopPropagation();
     const i = Number(btn.getAttribute("data-conductor-product-index"));
     if (Number.isNaN(i)) return;
     ui.participantLeftPanelKind = BRANCH_KIND_PRODUCT;
     ui.participantLeftPanelIndex = i;
+    openCondCard("product");
     syncConductorParticipantLeftPanel();
   });
 }
@@ -6196,6 +6414,7 @@ async function initConductorSurveyUi() {
       "Use the left panel to review the participant’s profile, raw materials, products, and supply-chain diagram (read-only). Open Advance to filter participants and map features.";
   }
   setupConductorCreateLink();
+  initCondCards();
   initConductorLeftPanelOnce();
   syncConductorParticipantLeftPanel();
   resetConductorFeatureFilters();

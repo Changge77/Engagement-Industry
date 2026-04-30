@@ -1338,6 +1338,55 @@ html.participant-welcome-ok #welcomeGate {
   pointer-events: none;
 }
 
+.animToggleBtn {
+  position: absolute;
+  bottom: 20px;
+  right: 10px;
+  z-index: 1000;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: #fff;
+  border: none;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  overflow: visible;
+}
+.animToggleBtn img {
+  width: 29px;
+  height: 29px;
+  pointer-events: none;
+}
+.animToggleBtn__x {
+  display: none;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 62px;
+  height: 62px;
+  pointer-events: none;
+}
+.animToggleBtn__x::before,
+.animToggleBtn__x::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 100%;
+  height: 1.5px;
+  background: #000;
+}
+.animToggleBtn__x::before { transform: translateY(-50%) rotate(45deg); }
+.animToggleBtn__x::after  { transform: translateY(-50%) rotate(-45deg); }
+.animToggleBtn--paused .animToggleBtn__x {
+  display: block;
+}
+
 .industryGate__title {
   margin: 0 0 8px;
   font-size: 1.08rem;
@@ -1749,21 +1798,7 @@ html:not(.participant-token-ok) body[data-survey-mode="participant"] #app {
   color: var(--accent2);
 }
 
-.conductorWorkspace {
-  height: 100vh;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-.conductorWorkspace #app {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
+/* conductorWorkspace layout now defined in the Conductor Sidebar block below */
 
 /* Conductor: scrollable participant summary; export block pinned to bottom of sidebar */
 .conductorParticipantMirror {
@@ -2078,27 +2113,7 @@ body[data-survey-mode="conductor"] {
   overflow: hidden;
 }
 
-body[data-survey-mode="conductor"] #app > main.layout {
-  flex: 1 1 auto;
-  min-height: 0;
-  height: 100%;
-  overflow: hidden;
-}
-
-body[data-survey-mode="conductor"] .layout > aside.panel {
-  overflow-x: hidden;
-  overflow-y: auto;
-}
-
-body[data-survey-mode="conductor"] .mapWrap {
-  min-height: 0;
-  height: 100%;
-}
-
-body[data-survey-mode="conductor"] #map {
-  min-height: 0;
-  height: 100%;
-}
+/* conductor map/layout overrides handled by .conductorMapArea rules in the sidebar block */
 
 .participantList li {
   margin-bottom: 6px;
@@ -2128,5 +2143,345 @@ body[data-survey-mode="conductor"] #map {
 .panel__hint--readonly {
   color: var(--muted);
   font-size: 13px;
+}
+
+/* ══ CONDUCTOR SIDEBAR LAYOUT ════════════════════════════════════ */
+
+.conductorWorkspace {
+  height: 100vh;
+  display: flex;
+  flex-direction: row;   /* sidebar left, main right */
+  overflow: hidden;
+  min-height: 0;
+}
+
+.conductorSidebar {
+  width: 380px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: linear-gradient(180deg, #ffffff 0%, #fff8fb 100%);
+  border-right: 1px solid var(--border);
+  box-shadow: 2px 0 16px rgba(61, 42, 50, 0.06);
+  z-index: 2;
+}
+
+.conductorSidebar__brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 16px 12px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.conductorSidebar__logo {
+  height: 40px;
+  width: auto;
+  display: block;
+}
+
+.conductorSidebar__brandRight {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.conductorSidebar__modeLabel {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--accent);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.conductorSidebar__shareBtn {
+  font-size: 12px;
+  padding: 6px 12px;
+  white-space: nowrap;
+}
+
+.conductorSidebar__tools {
+  padding: 10px 14px 8px;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--border);
+}
+
+/* Main / map area */
+.conductorMain {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+
+body[data-survey-mode="conductor"] #app {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Filter bar — always open, top of right area */
+.conductorFilterBar {
+  flex-shrink: 0;
+  padding: 10px 16px 12px;
+  background: rgba(255, 255, 255, 0.96);
+  border-bottom: 1px solid var(--border);
+  box-shadow: 0 2px 8px rgba(61, 42, 50, 0.06);
+  overflow-y: auto;
+  max-height: 280px;
+}
+
+.conductorFilterBar .manifestFilterGrid {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr auto;
+  gap: 16px;
+  align-items: start;
+}
+
+.conductorFilterBar .participantList {
+  max-height: 140px;
+}
+
+/* Map area fills remaining space */
+.conductorMapArea {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.conductorMapArea .mapWrap {
+  flex: 1;
+  min-height: 0;
+  border-radius: 0;
+  border: none;
+}
+
+body[data-survey-mode="conductor"] #map {
+  min-height: 0;
+  height: 100%;
+}
+
+/* ══ CONDUCTOR CARDS ════════════════════════════════════════════ */
+
+.conductorCards {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 10px 10px 0;
+  gap: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* ── Base card ─────────────────────────────────────────────────── */
+.condCard {
+  border-radius: 14px;
+  overflow: hidden;
+  flex-shrink: 0;
+  margin-bottom: 8px;
+  box-shadow:
+    0 2px 8px rgba(61, 42, 50, 0.08),
+    0 6px 20px rgba(61, 42, 50, 0.07);
+  transition: box-shadow 0.3s ease, flex-grow 0.35s ease;
+  position: relative;
+}
+
+.condCard--open {
+  flex-shrink: 0;
+  flex-grow: 1;
+  box-shadow:
+    0 4px 16px rgba(61, 42, 50, 0.13),
+    0 12px 36px rgba(61, 42, 50, 0.11);
+  z-index: 10;
+}
+
+/* ── Card colours ──────────────────────────────────────────────── */
+.condCard--participant {
+  background: linear-gradient(150deg, #fdeef4 0%, #fff5f8 100%);
+}
+.condCard--raw {
+  background: linear-gradient(150deg, #d1f7ec 0%, #edfaf5 100%);
+}
+.condCard--product {
+  background: linear-gradient(150deg, #fef3c7 0%, #fffbeb 100%);
+}
+.condCard--summary {
+  background: linear-gradient(150deg, #e0e7ff 0%, #f5f3ff 100%);
+}
+
+/* ── Card top area (clickable: title row + preview) ──────────── */
+.condCard__top {
+  cursor: pointer;
+  user-select: none;
+  padding: 10px 14px 8px;
+}
+
+.condCard__top:hover {
+  filter: brightness(0.97);
+}
+
+.condCard__titleRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.condCard__title {
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--text);
+}
+
+.condCard__chevron {
+  font-size: 11px;
+  color: var(--accent);
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  flex-shrink: 0;
+}
+
+.condCard--open .condCard__chevron {
+  transform: rotate(90deg);
+}
+
+/* ── Preview area ───────────────────────────────────────────── */
+.condCard__preview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-height: 20px;
+}
+
+.condCard__metaChip {
+  font-size: 11px;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.6);
+  border: 1px solid rgba(61, 42, 50, 0.12);
+  border-radius: 999px;
+  padding: 2px 8px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 140px;
+  backdrop-filter: blur(4px);
+}
+
+.condCard__previewText {
+  font-size: 11px;
+  color: var(--muted);
+  font-style: italic;
+}
+
+.condCard__pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-width: 0;
+}
+
+.condCard__pills .participantPill {
+  font-size: 11px;
+  padding: 3px 9px;
+}
+
+/* ── Card body (animated expand/collapse) ───────────────────── */
+.condCard__body {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.38s cubic-bezier(0.4, 0, 0.2, 1);
+  border-top: 1px solid transparent;
+}
+
+.condCard--open .condCard__body {
+  max-height: 60vh;
+  overflow-y: auto;
+  border-top-color: rgba(61, 42, 50, 0.1);
+}
+
+.condCard__bodyInner {
+  padding: 10px 14px 14px;
+}
+
+/* Body content padding since bodyInner wrapper not always present */
+.condCard__body > *:not(.supplyChainDiagramMount) {
+  padding-left: 14px;
+  padding-right: 14px;
+}
+
+.condCard__body > .supplyChainDiagramMount {
+  padding: 0 14px 14px;
+}
+
+.condCard__body > *:first-child {
+  margin-top: 10px;
+}
+
+.condCard__emptyMsg {
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.4;
+  margin: 0;
+}
+
+.condCard__date {
+  font-size: 12px;
+  color: var(--muted);
+  margin: 0 0 12px;
+}
+
+.condCard__stats {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.condCard__statRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 7px 10px;
+  border: 1px solid rgba(61, 42, 50, 0.1);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.5);
+}
+
+.condCard__statLabel {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.condCard__statValue {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.condCard__exportTitle {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+/* Hide dropdown arrow on readonly diagram selects so they read as static text */
+.supplyChainDiagramMount--sidebarReadonly select:disabled {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  border-color: transparent;
+  background: rgba(241, 245, 249, 0.85);
+  padding-right: 8px;
+  pointer-events: none;
 }
 

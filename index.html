@@ -13,70 +13,180 @@
   </head>
   <body data-survey-mode="conductor">
     <div id="conductorWorkspace" class="conductorWorkspace">
-      <div class="conductorToolbar">
-        <h1 class="conductorToolbar__title">Manifest - Conductor</h1>
-        <div class="conductorToolbar__row">
-          <h2 class="conductorToolbar__h2">Participants</h2>
-          <span class="conductorToolbar__hint" id="conductorViewingLabel"></span>
+
+      <!-- ══ LEFT SIDEBAR ══════════════════════════════════════ -->
+      <div class="conductorSidebar">
+
+        <!-- Brand area -->
+        <div class="conductorSidebar__brand">
+          <img src="Icons/Logo/Logo.svg" alt="Manifest" class="conductorSidebar__logo" />
+          <div class="conductorSidebar__brandRight">
+            <span class="conductorSidebar__modeLabel">Conductor</span>
+            <button class="primaryBtn conductorSidebar__shareBtn" id="createParticipantBtn" type="button">Share Survey</button>
+          </div>
         </div>
-        <div id="conductorIndustryLabel" class="conductorToolbar__industry is-hidden" aria-live="polite"></div>
-        <div class="conductorToolbar__create">
-          <input
-            id="newParticipantLabel"
-            class="conductorToolbar__input"
-            type="text"
-            placeholder="Label (e.g. name or session ID)"
-            maxlength="200"
-          />
-          <button class="primaryBtn" id="createParticipantBtn" type="button">
-            Create sharing link
-          </button>
+
+        <!-- Participant tools -->
+        <div class="conductorSidebar__tools">
+          <div class="conductorToolbar__row">
+            <h2 class="conductorToolbar__h2">Participants</h2>
+            <span class="conductorToolbar__hint" id="conductorViewingLabel"></span>
+          </div>
+          <div id="conductorIndustryLabel" class="conductorToolbar__industry is-hidden" aria-live="polite"></div>
+          <div class="conductorToolbar__create">
+            <input
+              id="newParticipantLabel"
+              class="conductorToolbar__input"
+              type="text"
+              placeholder="Label (e.g. name or session ID)"
+              maxlength="200"
+            />
+          </div>
+          <textarea id="shareUrlOutput" class="shareUrlOutput is-hidden" readonly rows="3" aria-label="Sharing link"></textarea>
         </div>
-        <textarea
-          id="shareUrlOutput"
-          class="shareUrlOutput is-hidden"
-          readonly
-          rows="3"
-          aria-label="Sharing link"
-        ></textarea>
-        <div class="participantFilterBar">
-          <button
-            type="button"
-            id="participantFilterToggle"
-            class="ghostBtn participantFilterToggle"
-            aria-expanded="false"
-            aria-controls="participantFilterPanel"
-          >
-            <span class="participantFilterToggle__chevron" aria-hidden="true">▸</span>
-            <span id="participantFilterToggleLabel">Advance</span>
-          </button>
-        </div>
-        <div id="participantFilterPanel" class="participantFilterPanel is-hidden">
+
+        <!-- ── Stacked cards ──────────────────────────────────── -->
+        <div class="conductorCards">
+
+          <!-- Card: Participant -->
+          <div class="condCard condCard--participant" id="condCard_participant">
+            <div class="condCard__top">
+              <div class="condCard__titleRow">
+                <span class="condCard__title">Participant</span>
+                <span class="condCard__chevron" aria-hidden="true">▸</span>
+              </div>
+              <div class="condCard__preview">
+                <span id="condCardSummaryCompany" class="condCard__metaChip"></span>
+                <span id="condCardSummaryRole" class="condCard__metaChip"></span>
+                <span id="condCardSummaryProducts" class="condCard__metaChip"></span>
+              </div>
+            </div>
+            <div class="condCard__body" id="condCardBody_participant">
+              <p id="condCardDate" class="condCard__date"></p>
+              <div id="conductorProfileCard" class="participantProfileCard participantProfileCard--conductorReadonly is-hidden" aria-label="Participant profile (read-only)">
+                <div class="participantProfileRow participantProfileRow--products">
+                  <div class="participantProfileProductsHeader">
+                    <span class="participantProfileRow__label participantProfileRow__label--inline">Company</span>
+                  </div>
+                  <ul id="conductorProfileCompanyList" class="participantProfileProductList is-hidden" aria-label="Company name"></ul>
+                  <p id="conductorProfileCompanyEmpty" class="participantProfileProductsEmpty">—</p>
+                </div>
+                <div class="participantProfileRow participantProfileRow--products">
+                  <div class="participantProfileProductsHeader">
+                    <span class="participantProfileRow__label participantProfileRow__label--inline">Job &amp; Role</span>
+                  </div>
+                  <ul id="conductorProfileRoleList" class="participantProfileProductList is-hidden" aria-label="Job and role"></ul>
+                  <p id="conductorProfileRoleEmpty" class="participantProfileProductsEmpty">—</p>
+                </div>
+                <div class="participantProfileRow participantProfileRow--products">
+                  <div class="participantProfileProductsHeader">
+                    <span class="participantProfileRow__label participantProfileRow__label--inline">Type of Products</span>
+                  </div>
+                  <ul id="conductorProfileProductsList" class="participantProfileProductList is-hidden" aria-label="Selected product types"></ul>
+                  <p id="conductorProfileProductsEmpty" class="participantProfileProductsEmpty">—</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Card: Raw Materials -->
+          <div class="condCard condCard--raw" id="condCard_raw">
+            <div class="condCard__top">
+              <div class="condCard__titleRow">
+                <span class="condCard__title">Raw Materials</span>
+                <span class="condCard__chevron" aria-hidden="true">▸</span>
+              </div>
+              <div class="condCard__preview">
+                <div id="conductorRawMaterialPills" class="condCard__pills participantPillRow" role="tablist" aria-label="Raw materials"></div>
+              </div>
+            </div>
+            <div class="condCard__body" id="condCardBody_raw">
+              <div id="conductorLeftEmpty" class="condCard__emptyMsg" aria-live="polite"></div>
+              <p id="conductorLeftDetailPlaceholder" class="condCard__emptyMsg is-hidden"></p>
+              <div id="conductorLeftDiagramMount" class="supplyChainDiagramMount supplyChainDiagramMount--left supplyChainDiagramMount--sidebarReadonly"></div>
+              <span id="conductorLeftDetailName" class="is-hidden"></span>
+              <div id="conductorLeftShell" class="is-hidden"></div>
+              <div id="conductorLeftDetail" class="is-hidden"></div>
+            </div>
+          </div>
+
+          <!-- Card: Products -->
+          <div class="condCard condCard--product" id="condCard_product">
+            <div class="condCard__top">
+              <div class="condCard__titleRow">
+                <span class="condCard__title">Products</span>
+                <span class="condCard__chevron" aria-hidden="true">▸</span>
+              </div>
+              <div class="condCard__preview">
+                <div id="conductorProductPills" class="condCard__pills participantPillRow participantPillRow--products" role="tablist" aria-label="Products"></div>
+              </div>
+            </div>
+            <div class="condCard__body" id="condCardBody_product">
+              <p id="conductorProductDetailPlaceholder" class="condCard__emptyMsg is-hidden"></p>
+              <div id="conductorProductDiagramMount" class="supplyChainDiagramMount supplyChainDiagramMount--left supplyChainDiagramMount--sidebarReadonly"></div>
+            </div>
+          </div>
+
+          <!-- Card: Summary -->
+          <div class="condCard condCard--summary" id="condCard_summary">
+            <div class="condCard__top">
+              <div class="condCard__titleRow">
+                <span class="condCard__title">Summary</span>
+                <span class="condCard__chevron" aria-hidden="true">▸</span>
+              </div>
+              <div class="condCard__preview">
+                <span id="condCardSummaryPreview" class="condCard__previewText"></span>
+              </div>
+            </div>
+            <div class="condCard__body" id="condCardBody_summary">
+              <div id="conductorSummaryStats" class="condCard__stats"></div>
+              <h3 class="condCard__exportTitle">Export data</h3>
+              <div class="panelActions">
+                <button class="primaryBtn" id="exportCSV" type="button">CSV (selected)</button>
+                <button class="primaryBtn" id="exportRoutesGeoJSON" type="button">GeoJSON (selected)</button>
+              </div>
+              <div class="panelActions" style="margin-top:8px">
+                <button class="primaryBtn" id="exportAllParticipantsCSV" type="button">CSV (all)</button>
+                <button class="primaryBtn" id="exportAllParticipantsGeoJSON" type="button">GeoJSON (all)</button>
+              </div>
+              <div class="exportSummary">
+                <div class="exportSummary__item">
+                  <span class="exportSummary__label">Locations</span>
+                  <span class="exportSummary__value" id="exportLocationsCount">0</span>
+                </div>
+                <div class="exportSummary__item">
+                  <span class="exportSummary__label">Current segments</span>
+                  <span class="exportSummary__value" id="exportCurrentSegments">0</span>
+                </div>
+                <div class="exportSummary__item">
+                  <span class="exportSummary__label">IBX segments</span>
+                  <span class="exportSummary__value" id="exportIbXSegments">0</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div><!-- /.conductorCards -->
+      </div><!-- /.conductorSidebar -->
+
+      <!-- ══ RIGHT MAIN AREA ══════════════════════════════════ -->
+      <div id="app" class="conductorMain">
+
+        <!-- Filter bar — always visible -->
+        <div id="participantFilterPanel" class="conductorFilterBar">
           <div class="manifestFilterGrid">
             <section class="manifestFilterSection">
               <div class="manifestFilterSection__header">
                 <h3 class="manifestFilterSection__title">Filter by Participants</h3>
                 <div class="manifestFilterSection__actions">
-                  <button class="ghostBtn manifestFilterSection__showAll" id="participantFilterShowAll" type="button">
-                    Show All
-                  </button>
-                  <button class="ghostBtn manifestFilterSection__showAll" id="participantFilterHideAll" type="button">
-                    Hide All
-                  </button>
+                  <button class="ghostBtn manifestFilterSection__showAll" id="participantFilterShowAll" type="button">Show All</button>
+                  <button class="ghostBtn manifestFilterSection__showAll" id="participantFilterHideAll" type="button">Hide All</button>
                 </div>
               </div>
               <div class="participantPicker">
                 <label class="participantPicker__label" for="participantSearch">Find participant</label>
-                <input
-                  id="participantSearch"
-                  class="participantPicker__input"
-                  type="search"
-                  placeholder="Type to search (name, id)…"
-                  autocomplete="off"
-                />
-                <p class="participantPicker__hint">
-                  Check multiple participants for filtering. Use View to open one profile; Delete removes it permanently.
-                </p>
+                <input id="participantSearch" class="participantPicker__input" type="search" placeholder="Type to search…" autocomplete="off" />
+                <p class="participantPicker__hint">Check to filter map. Use View to open one profile; Delete removes it permanently.</p>
               </div>
               <ul id="participantList" class="participantList participantList--with-delete" aria-label="Filtered participants"></ul>
             </section>
@@ -118,128 +228,25 @@
             </section>
           </div>
         </div>
-      </div>
 
-      <div id="app">
-        <header class="topbar">
-          <div class="topbar__title"></div>
-          <div class="topbar__meta">
-            <span class="pill" id="activeStepPill">Map · all layers (read-only)</span>
-          </div>
-        </header>
-
-        <main class="layout">
-          <aside class="panel app--readonly-panel">
-            <div class="conductorParticipantMirror" aria-label="Participant survey summary">
-              <div
-                id="conductorProfileCard"
-                class="participantProfileCard participantProfileCard--conductorReadonly is-hidden"
-                aria-label="Participant profile (read-only)"
-              >
-                <div class="participantProfileRow participantProfileRow--products">
-                  <div class="participantProfileProductsHeader">
-                    <span class="participantProfileRow__label participantProfileRow__label--inline">Company</span>
-                  </div>
-                  <ul id="conductorProfileCompanyList" class="participantProfileProductList is-hidden" aria-label="Company name"></ul>
-                  <p id="conductorProfileCompanyEmpty" class="participantProfileProductsEmpty">—</p>
-                </div>
-                <div class="participantProfileRow participantProfileRow--products">
-                  <div class="participantProfileProductsHeader">
-                    <span class="participantProfileRow__label participantProfileRow__label--inline">Job &amp; Role</span>
-                  </div>
-                  <ul id="conductorProfileRoleList" class="participantProfileProductList is-hidden" aria-label="Job and role"></ul>
-                  <p id="conductorProfileRoleEmpty" class="participantProfileProductsEmpty">—</p>
-                </div>
-                <div class="participantProfileRow participantProfileRow--products">
-                  <div class="participantProfileProductsHeader">
-                    <span class="participantProfileRow__label participantProfileRow__label--inline">Type of Products</span>
-                  </div>
-                  <ul id="conductorProfileProductsList" class="participantProfileProductList is-hidden" aria-label="Selected product types"></ul>
-                  <p id="conductorProfileProductsEmpty" class="participantProfileProductsEmpty">—</p>
-                </div>
-              </div>
-              <div class="participantAsideContent conductorAsideContent">
-                <div id="conductorLeftEmpty" class="participantLeftEmpty" aria-hidden="true">
-                  Click "View" for detailed information.
-                </div>
-                <div id="conductorLeftShell" class="participantLeftShell is-hidden">
-                  <div class="participantLeftSection">
-                    <h3 class="participantLeftSection__h">Raw Materials</h3>
-                    <div id="conductorRawMaterialPills" class="participantPillRow" role="tablist" aria-label="Raw materials"></div>
-                  </div>
-                  <div class="participantLeftSection">
-                    <h3 class="participantLeftSection__h">Products</h3>
-                    <div
-                      id="conductorProductPills"
-                      class="participantPillRow participantPillRow--products"
-                      role="tablist"
-                      aria-label="Products"
-                    ></div>
-                  </div>
-                  <div id="conductorLeftDetail" class="participantLeftDetail is-hidden">
-                    <h3 class="participantLeftDetail__h">
-                      <span class="participantLeftDetail__label">Detail:</span>
-                      <span id="conductorLeftDetailName" class="participantLeftDetail__name"></span>
-                    </h3>
-                    <p id="conductorLeftDetailPlaceholder" class="participantLeftDetailPlaceholder is-hidden"></p>
-                    <div
-                      id="conductorLeftDiagramMount"
-                      class="supplyChainDiagramMount supplyChainDiagramMount--left"
-                    ></div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div class="conductorExportBlock" aria-label="Export survey data">
-              <h2 class="panel__h2">Export survey data</h2>
-              <p class="panel__hint">
-                <strong>Selected participant</strong> — includes participant columns in the file.
-              </p>
-              <div class="panelActions">
-                <button class="primaryBtn" id="exportCSV" type="button">
-                  Download CSV (selected participant)
-                </button>
-                <button class="primaryBtn" id="exportRoutesGeoJSON" type="button">
-                  Download Routes GeoJSON (selected participant)
-                </button>
-              </div>
-              <p class="panel__hint">
-                <strong>All participants</strong> — merged download for analysis.
-              </p>
-              <div class="panelActions">
-                <button class="primaryBtn" id="exportAllParticipantsCSV" type="button">
-                  Download CSV (all participants)
-                </button>
-                <button class="primaryBtn" id="exportAllParticipantsGeoJSON" type="button">
-                  Download Routes GeoJSON (all participants)
-                </button>
-              </div>
-
-              <div class="exportSummary">
-                <div class="exportSummary__item">
-                  <span class="exportSummary__label">Locations</span>
-                  <span class="exportSummary__value" id="exportLocationsCount">0</span>
-                </div>
-                <div class="exportSummary__item">
-                  <span class="exportSummary__label">Current segments</span>
-                  <span class="exportSummary__value" id="exportCurrentSegments">0</span>
-                </div>
-                <div class="exportSummary__item">
-                  <span class="exportSummary__label">IBX segments</span>
-                  <span class="exportSummary__value" id="exportIbXSegments">0</span>
-                </div>
-              </div>
-            </div>
-          </aside>
-
+        <!-- Map -->
+        <main class="conductorMapArea">
           <section class="mapWrap">
             <div id="map"></div>
             <div class="mapHint" id="mapHint"></div>
           </section>
         </main>
-      </div>
-    </div>
+
+        <!-- Hidden legacy topbar (JS may reference activeStepPill) -->
+        <header class="topbar" style="display:none">
+          <div class="topbar__title"></div>
+          <div class="topbar__meta">
+            <span class="pill" id="activeStepPill">Map · all layers (read-only)</span>
+          </div>
+        </header>
+      </div><!-- /#app -->
+
+    </div><!-- /#conductorWorkspace -->
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6.5.0/turf.min.js"></script>
