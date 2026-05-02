@@ -97,6 +97,14 @@
         margin-bottom: 32px;
       }
 
+      .sectionHint {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--muted);
+        margin: -6px 0 14px;
+        line-height: 1.45;
+      }
+
       /* ── Stat cards ── */
       .statGrid {
         display: grid;
@@ -254,6 +262,27 @@
         font-weight: 800;
         color: var(--accent);
         white-space: nowrap;
+      }
+
+      .pieLegend__row--hit {
+        cursor: pointer;
+        border-radius: 4px;
+        padding: 4px 6px;
+        margin: -4px -6px;
+        transition: background 0.12s ease;
+      }
+
+      .pieLegend__row--hit:hover {
+        background: rgba(61, 42, 50, 0.05);
+      }
+
+      .pieLegend__row--hit:focus {
+        outline: none;
+      }
+
+      .pieLegend__row--hit:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
       }
 
       .panelCard__hint {
@@ -441,6 +470,115 @@
         margin-top: 24px;
       }
 
+      .dependencyMetricsBlock {
+        margin-top: 28px;
+      }
+
+      .scatterChartPanel {
+        width: 100%;
+        padding: 4px 0 8px;
+        transition: background 0.15s ease;
+      }
+
+      .scatterChartSvg {
+        display: block;
+        width: 100%;
+        height: auto;
+        min-height: 300px;
+      }
+
+      .scatterChartPoint {
+        stroke: var(--panel);
+        stroke-width: 1.5;
+        opacity: 0.82;
+      }
+
+      .scatterLegend {
+        list-style: none;
+        margin: 12px 0 0 0;
+        padding: 0;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px 20px;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--muted);
+      }
+
+      .scatterLegend__row {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .scatterLegend__swatch {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        flex-shrink: 0;
+      }
+
+      .scatterLegend__stroke {
+        flex-shrink: 0;
+      }
+
+      .ibxScatterControls {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 10px 14px;
+        margin: 0 0 12px 0;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--text);
+      }
+
+      .ibxScatterControls label {
+        margin: 0;
+        cursor: pointer;
+      }
+
+      .ibxScatterControls input[type="number"] {
+        width: 120px;
+        padding: 6px 8px;
+        font-size: 13px;
+        font-weight: 600;
+        border: 1px solid var(--border);
+        border-radius: 3px;
+        background: var(--bg);
+      }
+
+      .ibxScatterControls button {
+        padding: 6px 14px;
+        font-size: 13px;
+        font-weight: 700;
+        border: 1px solid var(--border);
+        background: var(--panel);
+        color: var(--text);
+        cursor: pointer;
+        border-radius: 3px;
+      }
+
+      .ibxScatterControls button:hover {
+        border-color: var(--accent);
+        background: rgba(201, 79, 124, 0.08);
+      }
+
+      #ibxScatterTpmStatus {
+        margin: -4px 0 12px 0;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--muted);
+      }
+
+      #ibxScatterTpmStatus.ibxScatterTpmStatus--warn {
+        color: #991b1b;
+      }
+
+      .scatterChartSvg .scatterIbxCorridorLine {
+        pointer-events: none;
+      }
+
       .dependencyChartGrid {
         display: grid;
         grid-template-columns: 1fr;
@@ -468,7 +606,7 @@
 
       .barChartHost {
         width: 100%;
-        min-height: 360px;
+        min-height: 400px;
         padding: 4px 0 8px;
         overflow: visible;
       }
@@ -477,7 +615,7 @@
         display: block;
         width: 100%;
         height: auto;
-        min-height: 320px;
+        min-height: 355px;
       }
 
       .barChart__bar {
@@ -503,6 +641,17 @@
         fill: var(--muted);
       }
 
+      .barChart__xCat .barChart__xIcon {
+        opacity: 0.95;
+      }
+
+      /* Narrower rotated labels — less intrusion into chart when paired with clockwise tilt */
+      .barChart__xCat .barChart__label {
+        font-size: 10.5px;
+        font-weight: 600;
+        letter-spacing: -0.02em;
+      }
+
       .barChart__value {
         font-size: 12px;
         font-weight: 700;
@@ -514,6 +663,216 @@
         font-weight: 700;
         fill: var(--text);
       }
+
+      /* ── Chart selection detail (after click on a chart element) ── */
+      .chartSelectionPanel {
+        position: fixed;
+        left: 0;
+        right: 0;
+        top: 59px;
+        z-index: 11;
+        padding: 0;
+        border-bottom: 1px solid var(--border);
+        background: rgba(255, 255, 255, 0.97);
+        backdrop-filter: blur(8px);
+        box-shadow: 0 4px 24px var(--shadow-strong);
+        display: none;
+      }
+
+      .chartSelectionPanel:not([hidden]) {
+        display: block;
+      }
+
+      .chartSelectionPanel__inner {
+        position: relative;
+        padding: 14px 44px 14px 18px;
+        max-width: 1280px;
+        margin: 0 auto;
+      }
+
+      .chartSelectionPanel__close {
+        position: absolute;
+        top: 10px;
+        right: 12px;
+        width: 32px;
+        height: 32px;
+        border: 1px solid var(--border);
+        background: var(--bg);
+        color: var(--text);
+        font-size: 20px;
+        line-height: 1;
+        cursor: pointer;
+        border-radius: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .chartSelectionPanel__close:hover {
+        background: rgba(201, 79, 124, 0.12);
+        border-color: var(--accent);
+      }
+
+      .chartSelectionPanel__title {
+        margin: 0 0 4px 0;
+        font-size: 13px;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--muted);
+      }
+
+      .chartSelectionPanel__subtitle {
+        margin: 0 0 10px 0;
+        font-size: 17px;
+        font-weight: 700;
+        color: var(--text);
+        line-height: 1.35;
+      }
+
+      .chartSelectionPanel__dl {
+        margin: 0;
+        display: grid;
+        grid-template-columns: auto 1fr;
+        gap: 6px 16px;
+        font-size: 13px;
+        align-items: baseline;
+      }
+
+      .chartSelectionPanel__dl dt {
+        margin: 0;
+        font-weight: 600;
+        color: var(--muted);
+      }
+
+      .chartSelectionPanel__dl dd {
+        margin: 0;
+        font-weight: 700;
+        color: var(--text);
+      }
+
+      .barChart__bar--hit {
+        cursor: pointer;
+        transition: fill-opacity 0.15s ease, filter 0.15s ease;
+      }
+
+      .barChart__bar--hit:hover,
+      .barChart__bar--hit:focus {
+        fill-opacity: 1;
+        filter: brightness(1.08);
+        outline: none;
+      }
+
+      .barChart__bar--hit:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+      }
+
+      .pieSlice--hit {
+        cursor: pointer;
+        transition: opacity 0.15s ease, filter 0.15s ease;
+      }
+
+      .pieSlice--hit:hover,
+      .pieSlice--hit:focus {
+        opacity: 1;
+        filter: brightness(1.06);
+        outline: none;
+      }
+
+      .pieSlice--hit:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+      }
+
+      .scatterChartBackdrop {
+        cursor: default;
+      }
+
+      .scatterChartSvg .scatterPointGroup {
+        transition: opacity 0.2s ease, filter 0.2s ease;
+      }
+
+      .scatterChartPanel--routeFocus .scatterChartSvg .scatterPointGroup {
+        opacity: 0.28;
+        filter: grayscale(0.25);
+      }
+
+      .scatterChartPanel--routeFocus .scatterChartSvg .scatterPointGroup--routeMatch {
+        opacity: 1;
+        filter: none;
+      }
+
+      .scatterChartPanel--routeFocus .scatterChartSvg .scatterPointGroup--routeMatch .scatterChartPoint:first-child {
+        stroke: var(--text);
+        stroke-width: 2;
+      }
+
+      .scatterPointGroup {
+        cursor: pointer;
+      }
+
+      .scatterChartPoint--hit {
+        cursor: pointer;
+        transition: filter 0.12s ease;
+      }
+
+      .scatterPointGroup:hover .scatterChartPoint:first-child,
+      .scatterPointGroup:focus-within .scatterChartPoint:first-child {
+        filter: brightness(1.18) drop-shadow(0 0 5px rgba(61, 42, 50, 0.35));
+      }
+
+      .scatterChartPoint--hit:hover,
+      .scatterChartPoint--hit:focus {
+        outline: none;
+      }
+
+      .scatterChartPoint--hit:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+      }
+
+      .barRow--hit {
+        cursor: pointer;
+        border-radius: 4px;
+        margin: 0 -6px;
+        padding: 6px;
+        transition: background 0.12s ease;
+      }
+
+      .barRow--hit:hover {
+        background: rgba(61, 42, 50, 0.04);
+      }
+
+      .barRow--hit:focus {
+        outline: none;
+      }
+
+      .barRow--hit:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+      }
+
+      .topFiveList__item--hit {
+        cursor: pointer;
+        border-radius: 4px;
+        margin-left: -0.35em;
+        padding: 6px 8px;
+        transition: background 0.12s ease;
+      }
+
+      .topFiveList__item--hit:hover {
+        background: rgba(61, 42, 50, 0.04);
+      }
+
+      .topFiveList__item--hit:focus {
+        outline: none;
+      }
+
+      .topFiveList__item--hit:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+      }
     </style>
   </head>
   <body>
@@ -523,6 +882,15 @@
       <span class="topbar__title">Analysis</span>
       <span class="topbar__subtitle" id="topbarSubtitle">Loading survey data<span class="loadingDots"></span></span>
     </header>
+
+    <div class="chartSelectionPanel" id="chartSelectionPanel" hidden>
+      <div class="chartSelectionPanel__inner">
+        <button type="button" class="chartSelectionPanel__close" id="chartSelectionClose" aria-label="Dismiss selection">×</button>
+        <p class="chartSelectionPanel__title" id="chartSelectionTitle"></p>
+        <p class="chartSelectionPanel__subtitle" id="chartSelectionSubtitle"></p>
+        <dl class="chartSelectionPanel__dl" id="chartSelectionDl"></dl>
+      </div>
+    </div>
 
     <div class="analysisMain">
 
@@ -583,9 +951,10 @@
         </div>
       </div>
 
-      <!-- Breakdowns -->
+      <!-- Statistics -->
       <div class="sectionBlock">
-        <p class="sectionTitle">Breakdowns</p>
+        <p class="sectionTitle">Statistics</p>
+        <p class="sectionHint">Click a pie slice, legend row, dependency bar, scatter point, top item, or an overview breakdown row for details.</p>
         <div class="breakdownsGrid">
 
           <div class="panelCard">
@@ -624,7 +993,7 @@
             <div class="panelCard">
               <p class="panelCard__title">Huge truck dependency</p>
               <p class="panelCard__hint">Huge Truck Route Distance × Trips/Month</p>
-              <div id="hugeTruckDependencyChart" class="barChartHost">
+              <div id="hugeTruckDependencyChart" class="barChartHost" data-analysis-chart>
                 <div class="emptyMsg">Loading<span class="loadingDots"></span></div>
               </div>
             </div>
@@ -632,7 +1001,7 @@
             <div class="panelCard">
               <p class="panelCard__title">Small truck dependency</p>
               <p class="panelCard__hint">Small Truck Route Distance × Trips/Month</p>
-              <div id="smallTruckDependencyChart" class="barChartHost">
+              <div id="smallTruckDependencyChart" class="barChartHost" data-analysis-chart>
                 <div class="emptyMsg">Loading<span class="loadingDots"></span></div>
               </div>
             </div>
@@ -640,8 +1009,27 @@
             <div class="panelCard">
               <p class="panelCard__title">Train &amp; rail dependency</p>
               <p class="panelCard__hint">Train &amp; Rail Route Distance × Trips/Month</p>
-              <div id="trainRailDependencyChart" class="barChartHost">
+              <div id="trainRailDependencyChart" class="barChartHost" data-analysis-chart>
                 <div class="emptyMsg">Loading<span class="loadingDots"></span></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="dependencyMetricsBlock">
+            <p class="sectionTitle">Transportation Metrics</p>
+            <div class="dependencyChartGrid">
+              <div class="panelCard">
+                <p class="panelCard__title">Segment frequency &amp; distance</p>
+                <p class="panelCard__hint">Distance • Frequency • Mode</p>
+                <div class="ibxScatterControls">
+                  <label for="ibxScatterTpmInput">IBX trips / month</label>
+                  <input id="ibxScatterTpmInput" type="number" min="0" step="any" placeholder="Optional" />
+                  <button type="button" id="ibxScatterTpmApply">Apply</button>
+                </div>
+                <p id="ibxScatterTpmStatus" class="muted" hidden></p>
+                <div id="transportSegmentFrequencyDistanceChart" class="barChartHost" data-analysis-chart>
+                  <div class="emptyMsg">Loading<span class="loadingDots"></span></div>
+                </div>
               </div>
             </div>
           </div>
@@ -723,7 +1111,8 @@
         construction: "Icons/Products/COnstruction_materials.svg",
         automotive: "Icons/Products/Auto_parts.svg",
         light_fabrication: "Icons/Products/Light_fabrication.svg",
-        high_tech: "Icons/Products/Tech.svg"
+        high_tech: "Icons/Products/Tech.svg",
+        other: "Icons/General/Product.svg"
       };
 
       /** Fixed X-axis order for transportation dependency charts (matches survey keys). */
@@ -884,6 +1273,178 @@
       }
 
       const ANALYSIS_DEPENDENCY_Y_STEP = 100;
+      const ANALYSIS_SCATTER_Y_STEP = 2;
+      /** Omit near-degenerate map legs so they don’t stack on the baseline. */
+      const SCATTER_MIN_LEG_MILES = 0.05;
+
+      const ANALYSIS_SCATTER_IBX_STORAGE_KEY = "analysisScatterIbxTpm";
+      const SCATTER_IBX_LINE_COLOR = "#ffd166";
+
+      let scatterChartCachePoints = [];
+      let scatterChartCacheIbxMiles = null;
+
+      function setIbxScatterStatus(message, warn) {
+        const el = document.getElementById("ibxScatterTpmStatus");
+        if (!el) return;
+        if (!message) {
+          el.hidden = true;
+          el.textContent = "";
+          el.classList.remove("ibxScatterTpmStatus--warn");
+          return;
+        }
+        el.hidden = false;
+        el.textContent = message;
+        el.classList.toggle("ibxScatterTpmStatus--warn", !!warn);
+      }
+
+      function readStoredIbxScatterTpm() {
+        try {
+          const raw = localStorage.getItem(ANALYSIS_SCATTER_IBX_STORAGE_KEY);
+          if (raw == null || raw === "") return 0;
+          const n = Number(raw);
+          return Number.isFinite(n) && n > 0 ? n : 0;
+        } catch {
+          return 0;
+        }
+      }
+
+      function syncIbxScatterInputFromStorage() {
+        const inp = document.getElementById("ibxScatterTpmInput");
+        if (!inp) return;
+        const tpm = readStoredIbxScatterTpm();
+        inp.value = tpm > 0 ? String(tpm) : "";
+      }
+
+      function writeStoredIbxScatterTpm(n) {
+        try {
+          if (!Number.isFinite(n) || n <= 0) localStorage.removeItem(ANALYSIS_SCATTER_IBX_STORAGE_KEY);
+          else localStorage.setItem(ANALYSIS_SCATTER_IBX_STORAGE_KEY, String(n));
+        } catch {
+          /* ignore */
+        }
+      }
+
+      /** Combined route miles from [IBX_Line_4326.geojson]. */
+      async function fetchIbxCorridorLengthMiles() {
+        if (typeof turf === "undefined" || typeof turf.length !== "function") return null;
+        try {
+          const res = await fetch("IBX_Line_4326.geojson");
+          if (!res.ok) return null;
+          const gj = await res.json();
+          const feats = Array.isArray(gj?.features) ? gj.features : [];
+          let sum = 0;
+          for (const ft of feats) {
+            const g = ft?.geometry;
+            if (!g) continue;
+            if (g.type === "LineString") {
+              sum += turf.length(ft, { units: "miles" });
+            } else if (g.type === "MultiLineString") {
+              for (const lineCoords of g.coordinates ?? []) {
+                if (!Array.isArray(lineCoords) || lineCoords.length < 2) continue;
+                sum += turf.length(
+                  {
+                    type: "Feature",
+                    properties: {},
+                    geometry: { type: "LineString", coordinates: lineCoords }
+                  },
+                  { units: "miles" }
+                );
+              }
+            }
+          }
+          return Number.isFinite(sum) && sum > 0 ? sum : null;
+        } catch {
+          return null;
+        }
+      }
+
+      async function ensureIbxCorridorMiles() {
+        if (typeof scatterChartCacheIbxMiles === "number" && scatterChartCacheIbxMiles > 0) {
+          return scatterChartCacheIbxMiles;
+        }
+        scatterChartCacheIbxMiles = await fetchIbxCorridorLengthMiles();
+        return scatterChartCacheIbxMiles;
+      }
+
+      function rerenderScatterFrequencyDistanceChart() {
+        const ibxStored = readStoredIbxScatterTpm();
+        const miles =
+          typeof scatterChartCacheIbxMiles === "number" && scatterChartCacheIbxMiles > 0
+            ? scatterChartCacheIbxMiles
+            : 0;
+        renderFrequencyDistanceScatterChart("transportSegmentFrequencyDistanceChart", scatterChartCachePoints, {
+          ibxTpm: ibxStored,
+          ibxCorridorMiles: miles
+        });
+      }
+
+      function setupScatterIbxControls() {
+        const btn = document.getElementById("ibxScatterTpmApply");
+        const inp = document.getElementById("ibxScatterTpmInput");
+        if (!btn || !inp) return;
+        btn.addEventListener("click", async () => {
+          const trimmed = inp.value.trim();
+          if (!trimmed) {
+            writeStoredIbxScatterTpm(0);
+            inp.value = "";
+            setIbxScatterStatus("");
+            rerenderScatterFrequencyDistanceChart();
+            return;
+          }
+          const n = Number(trimmed);
+          if (!Number.isFinite(n) || n < 0) {
+            setIbxScatterStatus("Enter a valid non-negative number, or clear the field and Apply to hide IBX.", true);
+            return;
+          }
+          if (n === 0) {
+            writeStoredIbxScatterTpm(0);
+            inp.value = "";
+            setIbxScatterStatus("");
+            rerenderScatterFrequencyDistanceChart();
+            return;
+          }
+          const miles = await ensureIbxCorridorMiles();
+          if (miles == null || !(miles > 0)) {
+            setIbxScatterStatus(
+              "Could not load IBX corridor length (IBX_Line_4326.geojson). IBX line not shown.",
+              true
+            );
+            return;
+          }
+          writeStoredIbxScatterTpm(n);
+          inp.value = String(n);
+          setIbxScatterStatus(`IBX corridor length (combined lines): ${miles.toFixed(2)} mi. Saved in this browser.`);
+          rerenderScatterFrequencyDistanceChart();
+        });
+      }
+
+      /** Scatter colors (Huge Truck · Train · Small Truck · Others) — align with stakeholder palette. */
+      const TRANSPORT_SEGMENT_SCATTER_COLORS = {
+        huge_truck: "#ef4444",
+        train: "#7dd3fc",
+        small_truck: "#f97316",
+        other: "#64748b"
+      };
+
+      function transportSegmentScatterFill(modeKey) {
+        const k = String(modeKey ?? "").trim();
+        return TRANSPORT_SEGMENT_SCATTER_COLORS[k] || TRANSPORT_SEGMENT_SCATTER_COLORS.other;
+      }
+
+      /** Miles drawn for supply-chain leg `legIndex`; 0 if missing or degenerate geometry. */
+      function branchLegDistanceMiles(b, legIndex) {
+        if (!b || typeof b !== "object") return 0;
+        const diag = b.supplyChainDiagram ?? {};
+        const legs = diag.transportLegs ?? [];
+        const drawn = b.supplyChainTransportRoutes ?? [];
+        const i = Number(legIndex);
+        if (!Number.isFinite(i) || i < 0 || i >= legs.length) return 0;
+        const pts = drawn[i]?.points;
+        if (!Array.isArray(pts) || pts.length < 2) return 0;
+        const latlngs = surveyAnalysisPointsToLatLngs(pts);
+        if (latlngs.length < 2) return 0;
+        return analysisLineLengthMiles(latlngs);
+      }
 
       /**
        * Y-axis anchored to data: ticks every `step`, one step pad below lowest relevant value
@@ -950,11 +1511,11 @@
         const valueToFrac = (v) => (Math.max(0, Number(v) || 0) - yMin) * invSpan;
 
         const W = 980;
-        const H = 400;
+        const H = 458;
         const padL = 88;
         const padR = 28;
         const padT = 22;
-        const padB = 110;
+        const padB = 168;
         const chartW = W - padL - padR;
         const chartH = H - padT - padB;
         const n = items.length;
@@ -996,22 +1557,324 @@
             )}</text>`;
           }
           const label = items[i].label ?? "";
+          const icon = typeof items[i].icon === "string" && items[i].icon.trim() ? items[i].icon.trim() : "";
           const lx = x + barW / 2;
-          const ly = padT + chartH + 18;
-          svg += `<text class="barChart__label" x="${lx}" y="${ly}" text-anchor="end" transform="rotate(-38 ${lx} ${ly})">${escHtml(label)}</text>`;
+          /* Pivot below baseline; clockwise tilt keeps glyphs in bottom margin instead of slicing into bars */
+          const baselineY = padT + chartH;
+          const xLabelPivotY = baselineY + 46;
+          const labelRotDeg = 30;
+          const iconSz = 20;
+          svg += `<g class="barChart__xCat" transform="translate(${lx},${xLabelPivotY}) rotate(${labelRotDeg})">`;
+          if (icon) {
+            svg += `<image class="barChart__xIcon" href="${escAttr(icon)}" width="${iconSz}" height="${iconSz}" x="${
+              -iconSz / 2
+            }" y="${-(iconSz + 22)}" preserveAspectRatio="xMidYMid meet" aria-hidden="true" focusable="false" />`;
+          }
+          svg += `<text class="barChart__label" dominant-baseline="hanging" x="0" y="${
+            icon ? "6" : "4"
+          }" text-anchor="middle">${escHtml(label)}</text>`;
+          svg += `</g>`;
         }
 
         svg += "</svg>";
         host.innerHTML = svg;
+
+        const chartTitle = opts?.chartTitle ?? "Bar chart";
+        const yLabel = opts?.yAxisLabel ?? "Value";
+        const bars = host.querySelectorAll(".barChart__bar");
+        bars.forEach((rect, i) => {
+          const it = items[i];
+          const v = values[i];
+          if (!it) return;
+          rect.classList.add("barChart__bar--hit");
+          rect.setAttribute("tabindex", "0");
+          rect.setAttribute("role", "button");
+          rect.setAttribute(
+            "aria-label",
+            `${it.label ?? "Category"}, ${analysisFormatBarLabel(v, step)}. Click for details.`
+          );
+          const pick = () => {
+            const valStr = `${analysisFormatBarLabel(v, step)} mi·trips / month (sum over participants)`;
+            showChartSelection({
+              title: chartTitle,
+              subtitle: it.label ?? "",
+              rows: [
+                { label: "Goods category", value: String(it.label ?? "—") },
+                { label: yLabel, value: valStr }
+              ]
+            });
+          };
+          rect.addEventListener("click", pick);
+          rect.addEventListener("keydown", (ev) => chartSelectionKeyActivate(ev, pick));
+        });
+      }
+
+      function analysisFormatScatterXTick(v, xMax) {
+        if (!Number.isFinite(v)) return "0";
+        const xr = Number(xMax);
+        const stepHint = xr > 0 ? xr / 6 : 1;
+        if (stepHint <= 10 && xr <= 80) return v.toLocaleString(undefined, { maximumFractionDigits: 2 });
+        if (v >= 100) return Math.round(v).toLocaleString();
+        return v.toLocaleString(undefined, { maximumFractionDigits: 1 });
+      }
+
+      /** Miles for scatter tooltips (axis formatter rounds small values to 0). */
+      function formatScatterDistanceMiles(v) {
+        const n = Number(v);
+        if (!Number.isFinite(n)) return "—";
+        if (n < 0.1) return n.toLocaleString(undefined, { maximumFractionDigits: 3 });
+        if (n < 10) return n.toLocaleString(undefined, { maximumFractionDigits: 2 });
+        return n.toLocaleString(undefined, { maximumFractionDigits: 1 });
+      }
+
+      function formatScatterTripsPerMonth(v) {
+        const n = Number(v);
+        if (!Number.isFinite(n)) return "—";
+        return n.toLocaleString(undefined, { maximumFractionDigits: 2 });
+      }
+
+      /** Escape plain text embedded in SVG (e.g. &lt;title&gt;). */
+      function escSvgText(s) {
+        return String(s ?? "")
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;");
+      }
+
+      /** Escape for double-quoted HTML/SVG attributes. */
+      function escAttr(s) {
+        return String(s ?? "")
+          .replace(/&/g, "&amp;")
+          .replace(/"/g, "&quot;")
+          .replace(/</g, "&lt;");
+      }
+
+      /** `points`: { x, y, modeKey, routeId } per leg. `opts`: ibxTpm, ibxCorridorMiles (vertical reference line). */
+      function renderFrequencyDistanceScatterChart(hostId, points, opts) {
+        const o = opts && typeof opts === "object" ? opts : {};
+        const ibxTpm = Number(o.ibxTpm) > 0 ? Number(o.ibxTpm) : 0;
+        const ibxCorridorMiles = Number(o.ibxCorridorMiles) > 0 ? Number(o.ibxCorridorMiles) : 0;
+        const hasIbxOverlay = ibxTpm > 0 && ibxCorridorMiles > 0;
+        const hasDots = Array.isArray(points) && points.length > 0;
+
+        const host = document.getElementById(hostId);
+        if (!host) return;
+        if (!hasDots && !hasIbxOverlay) {
+          host.innerHTML = '<p class="emptyMsg" style="padding:16px 0">No data</p>';
+          return;
+        }
+
+        const routeCountByRoute = new Map();
+        if (hasDots) {
+          for (const p of points) {
+            const rid = String(p.routeId ?? "").trim();
+            if (!rid) continue;
+            routeCountByRoute.set(rid, (routeCountByRoute.get(rid) ?? 0) + 1);
+          }
+        }
+
+        const xs = hasDots ? points.map((p) => Number(p.x) || 0) : [];
+        const ys = hasDots ? points.map((p) => Number(p.y) || 0) : [];
+        if (hasIbxOverlay) {
+          ys.push(ibxCorridorMiles);
+          xs.push(ibxTpm);
+        }
+
+        let rawMaxX = hasDots ? Math.max(...xs) : ibxTpm;
+        if (hasDots && ibxTpm > 0) rawMaxX = Math.max(rawMaxX, ibxTpm);
+        if (!Number.isFinite(rawMaxX) || rawMaxX <= 0) rawMaxX = 1;
+        let xMax = rawMaxX * 1.05;
+        if (!Number.isFinite(xMax) || xMax <= 0) xMax = 100;
+
+        const yValuesForBounds = hasDots ? ys.slice() : hasIbxOverlay ? [0, ibxCorridorMiles] : [0];
+        const { yMin, step: yStep, tickValues: yTicks, span: spanY } = analysisDependencyYBounds(
+          yValuesForBounds,
+          ANALYSIS_SCATTER_Y_STEP
+        );
+        const invSpanY = spanY > 0 ? 1 / spanY : 1;
+        const invSpanX = xMax > 0 ? 1 / xMax : 1;
+
+        const W = 980;
+        const H = 418;
+        const padL = 88;
+        const padR = 36;
+        const padT = 22;
+        const padB = 62;
+        const chartW = W - padL - padR;
+        const chartH = H - padT - padB;
+
+        const yToPx = (v) => {
+          const rawFrac = ((Math.max(0, Number(v) || 0) - yMin) * invSpanY);
+          const frac = Math.min(Math.max(rawFrac, 0), 1);
+          return padT + chartH * (1 - frac);
+        };
+        const xToPx = (v) => padL + Math.min(Math.max(((Number(v) || 0) - 0) * invSpanX, 0), 1) * chartW;
+
+        let svg = `<svg class="scatterChartSvg" viewBox="0 0 ${W} ${H}" width="100%" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Segment trips per month versus leg distance scatter plot">`;
+
+        svg += `<text class="barChart__yTitle" x="18" y="${padT + chartH / 2}" transform="rotate(-90 18 ${padT + chartH / 2})" text-anchor="middle">Distance (miles)</text>`;
+
+        for (const tv of yTicks) {
+          if (tv <= yMin) continue;
+          const gy = padT + chartH * (1 - (tv - yMin) * invSpanY);
+          svg += `<line class="barChart__grid" x1="${padL}" y1="${gy}" x2="${padL + chartW}" y2="${gy}" />`;
+        }
+
+        svg += `<line class="barChart__axis" x1="${padL}" y1="${padT + chartH}" x2="${padL + chartW}" y2="${padT + chartH}" />`;
+        svg += `<line class="barChart__axis" x1="${padL}" y1="${padT}" x2="${padL}" y2="${padT + chartH}" />`;
+
+        for (const tv of yTicks) {
+          const gy = padT + chartH * (1 - (tv - yMin) * invSpanY);
+          svg += `<line class="barChart__tick" x1="${padL - 6}" y1="${gy}" x2="${padL}" y2="${gy}" />`;
+          svg += `<text class="barChart__label" x="${padL - 10}" y="${gy + 4}" text-anchor="end">${escHtml(
+            analysisFormatAxisNumber(tv, yStep)
+          )}</text>`;
+        }
+
+        const xTickN = 6;
+        for (let i = 0; i <= xTickN; i++) {
+          const xv = (xMax * i) / xTickN;
+          const px = padL + (chartW * i) / xTickN;
+          svg += `<line class="barChart__tick" x1="${px}" y1="${padT + chartH}" x2="${px}" y2="${padT + chartH + 6}" />`;
+          svg += `<text class="barChart__label" x="${px}" y="${padT + chartH + 22}" text-anchor="middle">${escHtml(
+            analysisFormatScatterXTick(xv, xMax)
+          )}</text>`;
+        }
+
+        svg += `<text class="barChart__label" x="${padL + chartW / 2}" y="${H - 8}" text-anchor="middle" font-weight="700">Trips / month</text>`;
+
+        svg += `<rect class="scatterChartBackdrop" x="${padL}" y="${padT}" width="${chartW}" height="${chartH}" fill="transparent" aria-hidden="true" />`;
+
+        if (hasIbxOverlay) {
+          const ix = xToPx(ibxTpm);
+          const yBot = padT + chartH;
+          const yTop = yToPx(ibxCorridorMiles);
+          const ibxTip = `IBX corridor (combined line): ${formatScatterDistanceMiles(ibxCorridorMiles)} mi total height at ${formatScatterTripsPerMonth(ibxTpm)} trips/mo`;
+          svg +=
+            `<g class="scatterIbxCorridorWrap">` +
+            `<title>${escSvgText(ibxTip)}</title>` +
+            `<line class="scatterIbxCorridorLine" x1="${ix}" y1="${yBot}" x2="${ix}" y2="${yTop}" stroke="${SCATTER_IBX_LINE_COLOR}" stroke-width="3" stroke-dasharray="10 6" stroke-linecap="round" />` +
+            `</g>`;
+        }
+
+        if (hasDots) {
+          for (const p of points) {
+            const cx = xToPx(p.x);
+            const cy = yToPx(p.y);
+            const fill = transportSegmentScatterFill(p.modeKey);
+            const modeLabel = TRANSPORT_LABELS[p.modeKey] ?? p.modeKey ?? "—";
+            const tip =
+              `${modeLabel}: ${formatScatterDistanceMiles(p.y)} mi leg, ${formatScatterTripsPerMonth(p.x)} trips/mo`;
+            const routeAttr = escAttr(String(p.routeId ?? ""));
+            svg +=
+              `<g class="scatterPointGroup" data-route-id="${routeAttr}">` +
+              `<title>${escSvgText(tip)}</title>` +
+              `<circle class="scatterChartPoint" cx="${cx}" cy="${cy}" r="5" fill="${fill}" style="pointer-events:none" />` +
+              `<circle class="scatterChartPoint scatterChartPoint--hit" cx="${cx}" cy="${cy}" r="14" fill="transparent" stroke="none" />` +
+              `</g>`;
+          }
+        }
+
+        svg += "</svg>";
+
+        const legendKeys = ["huge_truck", "train", "small_truck", "other"];
+        let legendHtml = legendKeys
+          .map((key) => {
+            const fill = TRANSPORT_SEGMENT_SCATTER_COLORS[key];
+            const label = TRANSPORT_LABELS[key] ?? key;
+            const icon = TRANSPORT_ICONS[key];
+            const iconHtml = icon ? `<img src="${icon}" class="modeIcon" alt="" />` : "";
+            return `<li class="scatterLegend__row"><span class="scatterLegend__swatch" style="background:${fill}"></span>${iconHtml}<span>${escHtml(
+              label
+            )}</span></li>`;
+          })
+          .join("");
+        if (hasIbxOverlay) {
+          legendHtml += `<li class="scatterLegend__row"><span class="scatterLegend__stroke" style="border-bottom:3px dashed ${SCATTER_IBX_LINE_COLOR};display:inline-block;width:22px;height:0;line-height:0"></span><span>${escHtml(
+            "IBX corridor (full line length)"
+          )}</span></li>`;
+        }
+
+        host.innerHTML = `<div class="scatterChartPanel">${svg}<ul class="scatterLegend">${legendHtml}</ul></div>`;
+
+        const panelEl = host.querySelector(".scatterChartPanel");
+        const scatterTitle = "Segment frequency & distance";
+        let selectedRouteId = null;
+
+        function setRouteHighlight(routeId) {
+          if (!panelEl) return;
+          const groups = panelEl.querySelectorAll(".scatterPointGroup");
+          if (!routeId) {
+            panelEl.classList.remove("scatterChartPanel--routeFocus");
+            groups.forEach((g) => g.classList.remove("scatterPointGroup--routeMatch"));
+            selectedRouteId = null;
+            return;
+          }
+          selectedRouteId = routeId;
+          panelEl.classList.add("scatterChartPanel--routeFocus");
+          groups.forEach((g) => {
+            const id = g.getAttribute("data-route-id") ?? "";
+            if (id === routeId) g.classList.add("scatterPointGroup--routeMatch");
+            else g.classList.remove("scatterPointGroup--routeMatch");
+          });
+        }
+
+        const backdrop = panelEl?.querySelector(".scatterChartBackdrop");
+        if (backdrop) {
+          backdrop.addEventListener("click", () => setRouteHighlight(null));
+        }
+
+        if (!hasDots) return;
+
+        const hits = host.querySelectorAll(".scatterChartPoint--hit");
+        hits.forEach((hit, idx) => {
+          const p = points[idx];
+          if (!p) return;
+          hit.setAttribute("tabindex", "0");
+          hit.setAttribute("role", "button");
+          const modeLabel = TRANSPORT_LABELS[p.modeKey] ?? p.modeKey ?? "—";
+          const tpmStr = formatScatterTripsPerMonth(p.x);
+          const miStr = formatScatterDistanceMiles(p.y);
+          const routeKey = String(p.routeId ?? "").trim();
+          const segOnChart = routeKey ? (routeCountByRoute.get(routeKey) ?? 1) : 1;
+          hit.setAttribute(
+            "aria-label",
+            `Leg: ${modeLabel}, ${tpmStr} trips per month, ${miStr} miles. Same route shows ${segOnChart} dots on chart. Click again to clear route highlight or click chart background.`
+          );
+          const pick = () => {
+            showChartSelection({
+              title: scatterTitle,
+              subtitle: "One supply-chain leg",
+              rows: [
+                { label: "Transport mode", value: modeLabel },
+                { label: "Trips per month (route)", value: tpmStr },
+                { label: "Leg distance", value: `${miStr} mi` }
+              ]
+            });
+          };
+          const onActivate = () => {
+            if (routeKey && selectedRouteId === routeKey) setRouteHighlight(null);
+            else if (routeKey) setRouteHighlight(routeKey);
+            else setRouteHighlight(null);
+            pick();
+          };
+          hit.addEventListener("click", (ev) => {
+            ev.stopPropagation();
+            onActivate();
+          });
+          hit.addEventListener("keydown", (ev) => chartSelectionKeyActivate(ev, onActivate));
+        });
       }
 
       function roleLabel(key) {
         return ROLE_LABELS[key] || (key ? key : "Unknown");
       }
 
-      function renderBarList(containerId, items, fillClass) {
+      function renderBarList(containerId, items, fillClass, opts) {
         const el = document.getElementById(containerId);
         if (!el) return;
+        const selectionTitle = opts?.selectionTitle ?? "";
         if (!items.length) {
           el.innerHTML = '<p class="emptyMsg" style="padding:16px 0">No data</p>';
           return;
@@ -1023,7 +1886,7 @@
             ? `<img src="${icon}" class="modeIcon" alt="" />`
             : "";
           return `
-            <div class="barRow">
+            <div class="barRow${selectionTitle ? " barRow--hit" : ""}"${selectionTitle ? ' tabindex="0" role="button"' : ""}>
               <div class="barRow__header">
                 <span class="barRow__label">${iconHtml}${escHtml(label)}</span>
                 <span class="barRow__count">${count}</span>
@@ -1033,10 +1896,71 @@
               </div>
             </div>`;
         }).join("");
+
+        if (!selectionTitle) return;
+        el.querySelectorAll(".barRow--hit").forEach((row, i) => {
+          const it = items[i];
+          if (!it) return;
+          const pctOfMax = max > 0 ? Math.round((it.count / max) * 100) : 0;
+          row.setAttribute("aria-label", `${it.label}: ${it.count}. Click for details.`);
+          const pick = () => {
+            showChartSelection({
+              title: selectionTitle,
+              subtitle: it.label,
+              rows: [
+                { label: "Count", value: String(it.count) },
+                { label: "Relative to strongest in list", value: `${pctOfMax}% of bar (${max} max)` }
+              ]
+            });
+          };
+          row.addEventListener("click", pick);
+          row.addEventListener("keydown", (ev) => chartSelectionKeyActivate(ev, pick));
+        });
       }
 
       function escHtml(s) {
         return String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      }
+
+      /** Escape plain text embedded in HTML attribute positions. */
+      function escAttr(s) {
+        return String(s ?? "").replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
+      }
+
+      function showChartSelection(spec) {
+        const panel = document.getElementById("chartSelectionPanel");
+        const titleEl = document.getElementById("chartSelectionTitle");
+        const subtitleEl = document.getElementById("chartSelectionSubtitle");
+        const dl = document.getElementById("chartSelectionDl");
+        if (!panel || !titleEl || !subtitleEl || !dl) return;
+        titleEl.textContent = spec.title ?? "";
+        const sub = spec.subtitle ?? "";
+        subtitleEl.textContent = sub;
+        subtitleEl.style.display = sub ? "block" : "none";
+        dl.innerHTML = (spec.rows ?? [])
+          .map((r) => `<dt>${escHtml(r.label)}</dt><dd>${escHtml(r.value)}</dd>`)
+          .join("");
+        panel.removeAttribute("hidden");
+      }
+
+      function clearChartSelection() {
+        const panel = document.getElementById("chartSelectionPanel");
+        if (panel) panel.setAttribute("hidden", "");
+      }
+
+      function chartSelectionKeyActivate(ev, fn) {
+        if (ev.key === "Enter" || ev.key === " ") {
+          ev.preventDefault();
+          fn();
+        }
+      }
+
+      function setupChartSelectionUI() {
+        const closeBtn = document.getElementById("chartSelectionClose");
+        if (closeBtn) closeBtn.addEventListener("click", () => clearChartSelection());
+        document.addEventListener("keydown", (ev) => {
+          if (ev.key === "Escape") clearChartSelection();
+        });
       }
 
       function countBy(arr, keyFn) {
@@ -1070,9 +1994,10 @@
         return `M ${cx} ${cy} L ${x1} ${y1} A ${radius} ${radius} 0 ${largeArc} 1 ${x2} ${y2} Z`;
       }
 
-      function renderPieChart(hostId, items) {
+      function renderPieChart(hostId, items, opts) {
         const host = document.getElementById(hostId);
         if (!host) return;
+        const chartTitle = opts?.chartTitle ?? "Breakdown";
         const total = items.reduce((s, it) => s + (Number(it.count) || 0), 0);
         if (!items.length || total <= 0) {
           host.innerHTML = '<p class="emptyMsg" style="padding:16px 0">No data</p>';
@@ -1086,6 +2011,7 @@
         let colorIdx = 0;
         const paths = [];
         const legendRows = [];
+        const sliceMeta = [];
 
         for (const it of items) {
           const c = Number(it.count) || 0;
@@ -1098,14 +2024,20 @@
           const color = PIE_COLORS[colorIdx % PIE_COLORS.length];
           colorIdx++;
 
+          const d = pieSlicePath(cx, cy, radius, a0, a1);
           paths.push(
-            `<path d="${pieSlicePath(cx, cy, radius, a0, a1)}" fill="${color}" stroke="var(--panel)" stroke-width="2" stroke-linejoin="round" />`
+            `<path d="${d}" fill="${color}" stroke="var(--panel)" stroke-width="2" stroke-linejoin="round" class="pieSlice--hit" />`
           );
 
           const pct = ((c / total) * 100).toFixed(1);
+          sliceMeta.push({ label: it.label ?? "—", count: c, pct, total });
+          const sliceIndex = sliceMeta.length - 1;
+
           const iconHtml = it.icon ? `<img src="${it.icon}" class="modeIcon" alt="" />` : "";
           legendRows.push(
-            `<li class="pieLegend__row"><span class="pieLegend__swatch" style="background:${color}"></span>` +
+            `<li class="pieLegend__row pieLegend__row--hit" data-pie-slice="${sliceIndex}" tabindex="0" role="button" aria-label="${escAttr(
+              `${it.label ?? "slice"}: ${c} (${pct}%). Details.`
+            )}"><span class="pieLegend__swatch" style="background:${color}"></span>` +
             `<span class="pieLegend__label">${iconHtml}${escHtml(it.label)} <span class="pieLegend__pct">${pct}%</span></span></li>`
           );
         }
@@ -1118,11 +2050,47 @@
         host.innerHTML =
           `<div class="piePanel"><svg class="pieSvg" viewBox="0 0 200 200" aria-hidden="true">${paths.join("")}</svg>` +
           `<ul class="pieLegend">${legendRows.join("")}</ul></div>`;
+
+        const revealPieSlice = (meta) =>
+          showChartSelection({
+            title: chartTitle,
+            subtitle: meta.label,
+            rows: [
+              { label: "Count (this slice)", value: String(meta.count) },
+              { label: "Share of chart total", value: `${meta.pct}%` },
+              { label: "Chart denominator", value: String(meta.total) }
+            ]
+          });
+
+        const pathEls = host.querySelectorAll(".pieSlice--hit");
+        pathEls.forEach((pathEl, i) => {
+          const meta = sliceMeta[i];
+          if (!meta) return;
+          pathEl.setAttribute("tabindex", "0");
+          pathEl.setAttribute("role", "button");
+          pathEl.setAttribute(
+            "aria-label",
+            `${meta.label}: ${meta.count} (${meta.pct}% of chart). Click for details.`
+          );
+          const pick = () => revealPieSlice(meta);
+          pathEl.addEventListener("click", pick);
+          pathEl.addEventListener("keydown", (ev) => chartSelectionKeyActivate(ev, pick));
+        });
+
+        host.querySelectorAll(".pieLegend__row--hit[data-pie-slice]").forEach((row) => {
+          const idx = Number(row.dataset.pieSlice);
+          const meta = sliceMeta[idx];
+          if (!meta) return;
+          const pick = () => revealPieSlice(meta);
+          row.addEventListener("click", pick);
+          row.addEventListener("keydown", (ev) => chartSelectionKeyActivate(ev, pick));
+        });
       }
 
-      function renderTopFiveList(listId, items, totalDenom) {
+      function renderTopFiveList(listId, items, totalDenom, opts) {
         const el = document.getElementById(listId);
         if (!el) return;
+        const selectionTitle = opts?.selectionTitle ?? "";
         const top = items.slice(0, 5);
         let denom = totalDenom;
         if (typeof denom !== "number" || denom <= 0) {
@@ -1137,9 +2105,32 @@
         el.innerHTML = top
           .map(({ label, count }) => {
             const pct = ((count / denom) * 100).toFixed(1);
-            return `<li>${escHtml(label)} — <span style="font-weight:700;color:var(--accent)">${pct}%</span> <span style="font-weight:500;color:var(--muted);font-size:11px">of mentions</span></li>`;
+            const hitClass = selectionTitle ? "topFiveList__item--hit" : "";
+            const hitAttrs = selectionTitle ? ' tabindex="0" role="button"' : "";
+            return `<li class="${hitClass}"${hitAttrs}>${escHtml(label)} — <span style="font-weight:700;color:var(--accent)">${pct}%</span> <span style="font-weight:500;color:var(--muted);font-size:11px">of mentions</span></li>`;
           })
           .join("");
+
+        if (!selectionTitle) return;
+        el.querySelectorAll("li.topFiveList__item--hit").forEach((li, idx) => {
+          const item = top[idx];
+          if (!item) return;
+          const pctStr = ((item.count / denom) * 100).toFixed(1);
+          li.setAttribute("aria-label", `${item.label}: ${item.count} mentions, ${pctStr} percent.`);
+          const pick = () => {
+            showChartSelection({
+              title: selectionTitle,
+              subtitle: item.label,
+              rows: [
+                { label: "Mentions", value: String(item.count) },
+                { label: "Share of all mentions", value: `${pctStr}%` },
+                { label: "Total mentions (all items)", value: String(denom) }
+              ]
+            });
+          };
+          li.addEventListener("click", pick);
+          li.addEventListener("keydown", (ev) => chartSelectionKeyActivate(ev, pick));
+        });
       }
 
       async function loadAnalysis() {
@@ -1155,7 +2146,8 @@
           errorBanner.style.display = "block";
           errorBanner.textContent = `Could not load participants: ${err.message}`;
           subtitle.textContent = "Error loading data";
-          document.querySelectorAll("[id$='DependencyChart']").forEach((el) => {
+          clearChartSelection();
+          document.querySelectorAll("[data-analysis-chart]").forEach((el) => {
             el.innerHTML = '<p class="emptyMsg" style="padding:16px 0">No data</p>';
           });
           return;
@@ -1177,7 +2169,7 @@
           });
           ["participantsRolesBreakdownList","locationsBreakdownList","routesBreakdownList","companiesBreakdownList","rawMaterialsOverviewBreakdownList","productsOverviewBreakdownList"]
             .forEach(id => { document.getElementById(id).innerHTML = '<p class="emptyMsg" style="padding:16px 0">No data</p>'; });
-          document.querySelectorAll("[id$='DependencyChart']").forEach((el) => {
+          document.querySelectorAll("[data-analysis-chart]").forEach((el) => {
             el.innerHTML = '<p class="emptyMsg" style="padding:16px 0">No data</p>';
           });
           return;
@@ -1223,6 +2215,9 @@
         let segOther = 0;
         let supplyChainCount = 0;
 
+        /** One entry per drawn leg with branch trip frequency: { x: trips/month, y: miles, modeKey }. */
+        const scatterSegmentFrequencyDistancePoints = [];
+
         /** Per goods category: Σ participant mode dependency (full amount to each selected category). */
         const hugeDepByCat = new Map();
         const smallDepByCat = new Map();
@@ -1233,9 +2228,11 @@
           trainDepByCat.set(key, 0);
         }
 
-        for (const d of valid) {
+        for (let dIdx = 0; dIdx < valid.length; dIdx++) {
+          const d = valid[dIdx];
           const ind = d.state?.industry ?? {};
           const locs = d.state?.locations ?? [];
+          const participantId = String(d.id ?? d.label ?? "").trim() || `p${dIdx}`;
 
           if (ind.companyName) companies.add(ind.companyName.trim());
 
@@ -1272,11 +2269,13 @@
             if (loc?.locationType === "workplace") locCompany++;
           }
 
-          const branches = [
-            ...(ind.rawMaterialBranches ?? []),
-            ...(ind.productBranches ?? [])
+          const rawList = ind.rawMaterialBranches ?? [];
+          const prodList = ind.productBranches ?? [];
+          const branchEntries = [
+            ...rawList.map((b, i) => ({ b, routeId: `${participantId}:raw:${i}` })),
+            ...prodList.map((b, i) => ({ b, routeId: `${participantId}:prod:${i}` }))
           ];
-          for (const b of branches) {
+          for (const { b, routeId } of branchEntries) {
             if (!b) continue;
 
             const validOrigin =
@@ -1307,6 +2306,24 @@
               else segOther++;
             }
             if (chainHasDrawn) supplyChainCount++;
+
+            if (isTripFrequencyCompleteAnalysis(b)) {
+              const tpm = tripsPerMonthFromBranch(b);
+              if (tpm > 0) {
+                for (let ti = 0; ti < legs.length; ti++) {
+                  const modeKey = String(legs[ti]?.modeKey ?? "").trim();
+                  if (!modeKey) continue;
+                  const milesLeg = branchLegDistanceMiles(b, ti);
+                  if (!(milesLeg >= SCATTER_MIN_LEG_MILES)) continue;
+                  scatterSegmentFrequencyDistancePoints.push({
+                    x: tpm,
+                    y: milesLeg,
+                    modeKey,
+                    routeId
+                  });
+                }
+              }
+            }
           }
 
           for (const rm of (ind.rawMaterials ?? [])) {
@@ -1345,7 +2362,8 @@
             { label: "Manager", count: roleManagerOv },
             { label: "Others", count: roleOthersOv }
           ].sort((a, b) => b.count - a.count),
-          "barFill--role"
+          "barFill--role",
+          { selectionTitle: "Participants — roles breakdown" }
         );
 
         document.getElementById("statLocations").textContent = totalLocations;
@@ -1360,7 +2378,7 @@
           { label: "Origination", count: locOrigination },
           { label: "Destination", count: locDestination },
           { label: "Stopping",    count: locStopping }
-        ].sort((a, b) => b.count - a.count), "barFill--role");
+        ].sort((a, b) => b.count - a.count), "barFill--role", { selectionTitle: "Locations breakdown" });
 
         // ── Routes breakdown (segments by mode) ───────────────────────
 
@@ -1369,7 +2387,7 @@
           { label: "Small Truck Segments", count: segSmall, icon: TRANSPORT_ICONS.small_truck },
           { label: "Train Segments",       count: segTrain, icon: TRANSPORT_ICONS.train },
           { label: "Others",               count: segOther }
-        ].sort((a, b) => b.count - a.count), "barFill--trans");
+        ].sort((a, b) => b.count - a.count), "barFill--trans", { selectionTitle: "Routes — segments by mode" });
 
         // ── Companies overview — goods categories (participants per category) ──
 
@@ -1385,15 +2403,21 @@
             };
           })
           .sort((a, b) => b.count - a.count);
-        renderBarList("companiesBreakdownList", companyGoodsItems, "barFill--role");
+        renderBarList("companiesBreakdownList", companyGoodsItems, "barFill--role", {
+          selectionTitle: "Companies — goods categories"
+        });
 
         const rawMaterialCounts = countBy(allRawMaterials, (x) => x);
         const rawMaterialsTop12 = rawMaterialCounts.slice(0, 12);
-        renderBarList("rawMaterialsOverviewBreakdownList", rawMaterialsTop12, "barFill--raw");
+        renderBarList("rawMaterialsOverviewBreakdownList", rawMaterialsTop12, "barFill--raw", {
+          selectionTitle: "Raw materials — overview breakdown"
+        });
 
         const productCounts = countBy(allProducts, (x) => x);
         const productsTop12 = productCounts.slice(0, 12);
-        renderBarList("productsOverviewBreakdownList", productsTop12, "barFill--prod");
+        renderBarList("productsOverviewBreakdownList", productsTop12, "barFill--prod", {
+          selectionTitle: "Products — overview breakdown"
+        });
 
         subtitle.textContent = `${valid.length} participant${valid.length !== 1 ? "s" : ""} · updated ${new Date().toLocaleTimeString()}`;
 
@@ -1407,9 +2431,11 @@
             icon: TRANSPORT_ICONS[key] ?? null
           }));
 
-        renderPieChart("transportBreakdown", transportItems);
+        renderPieChart("transportBreakdown", transportItems, { chartTitle: "Transport modes" });
 
-        renderPieChart("companiesGoodsBreakdown", companyGoodsItems);
+        renderPieChart("companiesGoodsBreakdown", companyGoodsItems, {
+          chartTitle: "Companies — goods categories"
+        });
 
         // ── Roles ─────────────────────────────────────────────────────
 
@@ -1417,36 +2443,70 @@
           .sort((a, b) => b[1] - a[1])
           .map(([key, count]) => ({ label: roleLabel(key), count }));
 
-        renderPieChart("roleBreakdown", roleItems);
+        renderPieChart("roleBreakdown", roleItems, { chartTitle: "Participant roles" });
 
         // ── Raw materials / products (Breakdowns: top 5 lists) ────────
 
-        renderTopFiveList("rawMaterialBreakdown", rawMaterialCounts, allRawMaterials.length);
-        renderTopFiveList("productBreakdown", productCounts, allProducts.length);
+        renderTopFiveList("rawMaterialBreakdown", rawMaterialCounts, allRawMaterials.length, {
+          selectionTitle: "Top raw materials"
+        });
+        renderTopFiveList("productBreakdown", productCounts, allProducts.length, {
+          selectionTitle: "Top products"
+        });
 
         const hugeTruckDepItems = GOODS_CATEGORY_AXIS_ORDER.map((k) => ({
           label: GOODS_CATEGORY_LABELS[k] ?? k,
-          value: hugeDepByCat.get(k) ?? 0
+          value: hugeDepByCat.get(k) ?? 0,
+          icon: GOODS_CATEGORY_ICONS[k] ?? null
         }));
         renderVerticalBarChart("hugeTruckDependencyChart", hugeTruckDepItems, {
-          yAxisLabel: "Huge Truck Dependency / Month"
+          yAxisLabel: "Huge Truck Dependency / Month",
+          chartTitle: "Huge truck dependency by goods category"
         });
 
         const smallTruckDepItems = GOODS_CATEGORY_AXIS_ORDER.map((k) => ({
           label: GOODS_CATEGORY_LABELS[k] ?? k,
-          value: smallDepByCat.get(k) ?? 0
+          value: smallDepByCat.get(k) ?? 0,
+          icon: GOODS_CATEGORY_ICONS[k] ?? null
         }));
         renderVerticalBarChart("smallTruckDependencyChart", smallTruckDepItems, {
-          yAxisLabel: "Small Truck Dependency / Month"
+          yAxisLabel: "Small Truck Dependency / Month",
+          chartTitle: "Small truck dependency by goods category"
         });
 
         const trainRailDepItems = GOODS_CATEGORY_AXIS_ORDER.map((k) => ({
           label: GOODS_CATEGORY_LABELS[k] ?? k,
-          value: trainDepByCat.get(k) ?? 0
+          value: trainDepByCat.get(k) ?? 0,
+          icon: GOODS_CATEGORY_ICONS[k] ?? null
         }));
         renderVerticalBarChart("trainRailDependencyChart", trainRailDepItems, {
-          yAxisLabel: "Train & Rail Dependency / Month"
+          yAxisLabel: "Train & Rail Dependency / Month",
+          chartTitle: "Train & rail dependency by goods category"
         });
+
+        scatterChartCachePoints = scatterSegmentFrequencyDistancePoints;
+        await ensureIbxCorridorMiles();
+        syncIbxScatterInputFromStorage();
+        const tpmIbxStored = readStoredIbxScatterTpm();
+        const ibxMilesCached =
+          typeof scatterChartCacheIbxMiles === "number" && scatterChartCacheIbxMiles > 0
+            ? scatterChartCacheIbxMiles
+            : 0;
+        if (tpmIbxStored > 0 && !ibxMilesCached) {
+          setIbxScatterStatus(
+            "Could not load IBX corridor length (IBX_Line_4326.geojson). Apply again after fixing the file.",
+            true
+          );
+        }
+
+        renderFrequencyDistanceScatterChart(
+          "transportSegmentFrequencyDistanceChart",
+          scatterSegmentFrequencyDistancePoints,
+          {
+            ibxTpm: tpmIbxStored,
+            ibxCorridorMiles: ibxMilesCached
+          }
+        );
 
         // ── Participant table ──────────────────────────────────────────
 
@@ -1498,6 +2558,8 @@
       }
 
       setupOverviewToggles();
+      setupChartSelectionUI();
+      setupScatterIbxControls();
       loadAnalysis();
     </script>
   </body>
