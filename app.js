@@ -4546,7 +4546,7 @@ function renderSupplyChainDiagramMount(materialIndex, options = {}) {
     String(items[materialIndex] ?? "").trim() ||
     (branchKind === BRANCH_KIND_PRODUCT ? "this product" : "this material");
   const showTripFreqLeft =
-    (isParticipantActiveDiagramMount(mountId) && SURVEY_MODE === "participant") ||
+    (mountId === "participantLeftDiagramMount" && SURVEY_MODE === "participant") ||
     (mountId === "conductorLeftDiagramMount" && SURVEY_MODE === "conductor");
   const showTripFreqLeftResolved =
     showTripFreqLeft &&
@@ -4557,9 +4557,9 @@ function renderSupplyChainDiagramMount(materialIndex, options = {}) {
   const originIcon = originIconSrcForSupplyChain(br);
   const destIconSrc = destinationIconSrcForSupplyChainDiagram(d);
   const destSummaryText = formatSupplyChainDestinationDesc(d);
-  const showRedrawButtons = isParticipantActiveDiagramMount(mountId) && SURVEY_MODE === "participant" && !readOnly;
+  const showRedrawButtons = mountId === "participantLeftDiagramMount" && SURVEY_MODE === "participant" && !readOnly;
   const allowLeftOriginEdit =
-    isParticipantActiveDiagramMount(mountId) &&
+    mountId === "participantLeftDiagramMount" &&
     SURVEY_MODE === "participant" &&
     !readOnly &&
     br.originCategoryKey !== RAW_MATERIAL_ORIGIN_SKIPPED_KEY;
@@ -4766,7 +4766,7 @@ function renderSupplyChainDiagramMount(materialIndex, options = {}) {
       const nextDiagram = applySupplyChainDiagramConstraints(nextD);
       const mid = options.mountId ?? "rawMaterialSupplyChainDiagramMount";
       const mountEl = document.getElementById(mid);
-      if (isParticipantActiveDiagramMount(mid) && mountEl) {
+      if (mid === "participantLeftDiagramMount" && mountEl) {
         const o = readOriginFieldsFromDiagramMount(mountEl);
         if (o) {
           const res = applyOriginFromLeftDiagramToRow(row, nextDiagram, o);
@@ -4851,7 +4851,7 @@ function renderSupplyChainDiagramMount(materialIndex, options = {}) {
       applyDiagram(next);
     });
     mount.querySelector('[data-sc="origin-place-map"]')?.addEventListener("click", () => {
-      if (!isParticipantActiveDiagramMount(options.mountId ?? "rawMaterialSupplyChainDiagramMount")) return;
+      if ((options.mountId ?? "rawMaterialSupplyChainDiagramMount") !== "participantLeftDiagramMount") return;
       const o = readOriginFieldsFromDiagramMount(mount);
       if (!o?.originCategoryKey) {
         window.alert("Please select an originating location type.");
@@ -4894,7 +4894,7 @@ function renderSupplyChainDiagramMount(materialIndex, options = {}) {
     });
 
     const commitTripFreqFromLeft = () => {
-      if (!isParticipantActiveDiagramMount(mountId)) return;
+      if (mountId !== "participantLeftDiagramMount") return;
       const c = mount.querySelector('[data-trip-freq="count"]');
       const p = mount.querySelector('[data-trip-freq="period"]');
       ensure();
@@ -4939,23 +4939,12 @@ function syncParticipantLeftPanel() {
   const shellEl = document.getElementById("participantLeftShell");
   const pillsEl = document.getElementById("participantRawMaterialPills");
   const productPillsEl = document.getElementById("participantProductPills");
-  if (!emptyEl) return;
-
-  const kind = ui.participantLeftPanelKind;
-
-  // Kind-aware element selection: raw vs product each have their own detail/mount/save areas
-  const isProduct = kind === BRANCH_KIND_PRODUCT;
-  const detailEl = document.getElementById(isProduct ? "participantProductDetail" : "participantLeftDetail");
-  const otherDetailEl = document.getElementById(isProduct ? "participantLeftDetail" : "participantProductDetail");
+  const detailEl = document.getElementById("participantLeftDetail");
   const detailName = document.getElementById("participantLeftDetailName");
-  const placeholderEl = document.getElementById(isProduct ? "participantProductDetailPlaceholder" : "participantLeftDetailPlaceholder");
-  const mountEl = document.getElementById(isProduct ? "participantProductDiagramMount" : "participantLeftDiagramMount");
-  const saveRow = document.getElementById(isProduct ? "participantProductDiagramSaveRow" : "participantDiagramSaveRow");
-
-  // Always hide the inactive kind's detail panel
-  if (otherDetailEl) otherDetailEl.classList.add("is-hidden");
-  const otherSaveRow = document.getElementById(isProduct ? "participantDiagramSaveRow" : "participantProductDiagramSaveRow");
-  if (otherSaveRow) otherSaveRow.classList.add("is-hidden");
+  const placeholderEl = document.getElementById("participantLeftDetailPlaceholder");
+  const mountEl = document.getElementById("participantLeftDiagramMount");
+  const saveRow = document.getElementById("participantDiagramSaveRow");
+  if (!emptyEl || !shellEl) return;
 
   const mats = state.industry.rawMaterials ?? [];
   const prods = state.industry.products ?? [];
@@ -5495,14 +5484,10 @@ function initParticipantLeftPanelOnce() {
   });
 }
 
-/* ── Stacked card system (conductor + participant) ───────────── */
+/* ── Conductor stacked card system ───────────────────────────── */
 
 const COND_CARD_IDS = ["participant", "raw", "product", "summary"];
 const COND_CARD_PEEK = 72;
-
-function isParticipantActiveDiagramMount(id) {
-  return id === "participantLeftDiagramMount" || id === "participantProductDiagramMount";
-}
 
 let conductorOpenCard = "participant";
 
@@ -5959,7 +5944,7 @@ function initParticipantRawMaterialSupplyChainDiagramOnce() {
     ensure();
     const mount = document.getElementById(mountId);
     let prevRow = state.industry[branchesKey][idx];
-    if (isParticipantActiveDiagramMount(mountId) && mount) {
+    if (mountId === "participantLeftDiagramMount" && mount) {
       const o = readOriginFieldsFromDiagramMount(mount);
       if (o) {
         const res = applyOriginFromLeftDiagramToRow(prevRow, collected, o);
