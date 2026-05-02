@@ -618,7 +618,7 @@
           <div class="dependencyChartGrid">
             <div class="panelCard">
               <p class="panelCard__title">Huge truck dependency</p>
-              <p class="panelCard__hint">leg Distance × Trips/Month</p>
+              <p class="panelCard__hint">leg Distance × Trips/Month. Y-axis ticks every 100; vertical range auto-fits the data (baseline is the lowest tick, not necessarily zero).</p>
               <div id="hugeTruckDependencyChart" class="barChartHost">
                 <div class="emptyMsg">Loading<span class="loadingDots"></span></div>
               </div>
@@ -859,28 +859,34 @@
         return out;
       }
 
-      /** 1, 2, or 5 × 10^n — readable axis step size. */
-      function analysisNiceStep(rawStep) {
-        if (!Number.isFinite(rawStep) || rawStep <= 0) return 1;
-        const exp = Math.floor(Math.log10(rawStep));
-        const magnitude = Math.pow(10, exp);
-        const r = rawStep / magnitude;
-        const factor = r <= 1 ? 1 : r <= 2 ? 2 : r <= 5 ? 5 : 10;
-        return factor * magnitude;
-      }
+      const ANALYSIS_DEPENDENCY_Y_STEP = 100;
 
-      /** { scaleMax, step, tickValues } with integer-multiple ticks from 0 to scaleMax. */
-      function analysisNiceYScale(maxData, targetTickIntervals = 5) {
-        if (!Number.isFinite(maxData) || maxData <= 0) {
-          return { scaleMax: 1, step: 0.25, tickValues: [0, 0.25, 0.5, 0.75, 1] };
-        }
-        const roughStep = maxData / targetTickIntervals;
-        const step = analysisNiceStep(roughStep);
-        const numSteps = Math.max(1, Math.ceil(maxData / step - 1e-12));
-        const scaleMax = numSteps * step;
+      /**
+       * Y-axis anchored to data: ticks every `step`, one step pad below lowest relevant value
+       * and one above highest (bars use linear map v ↦ (v − yMin) / (yMax − yMin)).
+       */
+      function analysisDependencyYBounds(values, step) {
+        const s = Number(step) > 0 ? Number(step) : ANALYSIS_DEPENDENCY_Y_STEP;
+        const nums = values.map((v) => Number(v) || 0);
+        const maxVal = Math.max(...nums);
+        const minVal = Math.min(...nums);
+        const pos = nums.filter((v) => v > 0);
+        const minPos = pos.length ? Math.min(...pos) : maxVal;
+
+        let bottomRef = minVal;
+        if (minVal === 0 && pos.length) bottomRef = minPos;
+
+        let yMin = Math.floor(bottomRef / s) * s - s;
+        let yMax = Math.ceil(maxVal / s) * s + s;
+
+        if (yMin < 0) yMin = 0;
+        if (yMax <= yMin) yMax = yMin + s * 5;
+
         const tickValues = [];
-        for (let i = 0; i <= numSteps; i++) tickValues.push(Number((i * step).toPrecision(14)));
-        return { scaleMax, step, tickValues };
+        const numIntervals = Math.round((yMax - yMin) / s);
+        for (let i = 0; i <= numIntervals; i++) tickValues.push(yMin + i * s);
+
+        return { yMin, yMax, step: s, tickValues, span: yMax - yMin };
       }
 
       function analysisFormatAxisNumber(v, step) {
@@ -909,15 +915,15 @@
         if (!host) return;
         const yAxisLabel = opts?.yAxisLabel ?? "";
         const values = items.map((it) => Number(it.value) || 0);
-        const maxVal = Math.max(0, ...values, 1e-9);
         const sum = values.reduce((a, v) => a + v, 0);
         if (!items.length || sum <= 0) {
           host.innerHTML = '<p class="emptyMsg" style="padding:16px 0">No data</p>';
           return;
         }
 
-        const { scaleMax, step, tickValues } = analysisNiceYScale(maxVal, 5);
-        const invScale = scaleMax > 0 ? 1 / scaleMax : 1;
+        const { yMin, yMax, step, tickValues, span } = analysisDependencyYBounds(values, ANALYSIS_DEPENDENCY_Y_STEP);
+        const invSpan = span > 0 ? 1 / span : 1;
+        const valueToFrac = (v) => (Math.max(0, Number(v) || 0) - yMin) * invSpan;
 
         const W = 980;
         const H = 400;
@@ -934,10 +940,10 @@
         let svg = `<svg class="barChartSvg" viewBox="0 0 ${W} ${H}" width="100%" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Bar chart">`;
         svg += `<text class="barChart__yTitle" x="18" y="${padT + chartH / 2}" transform="rotate(-90 18 ${padT + chartH / 2})" text-anchor="middle">${escHtml(yAxisLabel)}</text>`;
 
-        // Horizontal guides (behind bars) at each tick except y=0
+        // Horizontal guides at each tick above the plot floor (yMin line)
         for (const tv of tickValues) {
-          if (tv <= 0) continue;
-          const frac = tv * invScale;
+          if (tv <= yMin) continue;
+          const frac = (tv - yMin) * invSpan;
           const gy = padT + chartH * (1 - frac);
           svg += `<line class="barChart__grid" x1="${padL}" y1="${gy}" x2="${padL + chartW}" y2="${gy}" />`;
         }
@@ -946,7 +952,7 @@
         svg += `<line class="barChart__axis" x1="${padL}" y1="${padT}" x2="${padL}" y2="${padT + chartH}" />`;
 
         for (const tv of tickValues) {
-          const frac = tv * invScale;
+          const frac = (tv - yMin) * invSpan;
           const y = padT + chartH * (1 - frac);
           svg += `<line class="barChart__tick" x1="${padL - 6}" y1="${y}" x2="${padL}" y2="${y}" />`;
           svg += `<text class="barChart__label" x="${padL - 10}" y="${y + 4}" text-anchor="end">${escHtml(
@@ -956,7 +962,7 @@
 
         for (let i = 0; i < n; i++) {
           const v = values[i];
-          const h = chartH * Math.min(v * invScale, 1);
+          const h = chartH * Math.min(Math.max(0, valueToFrac(v)), 1);
           const x = padL + i * (barW + gap);
           const y = padT + chartH - h;
           svg += `<rect class="barChart__bar" x="${x}" y="${y}" width="${barW}" height="${Math.max(h, 0)}" rx="3" />`;
