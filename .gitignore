@@ -1,5 +1,6 @@
 node_modules/
 .env
-# Track survey.db so participant data survives clone/pull; ignore other files under data/
 data/*
-!data/survey.db
+!data/Participants_Data/
+!data/Participants_Data/*.json
+data/.survey_sqlite_migrated

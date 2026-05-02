@@ -4,42 +4,95 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import dotenv from "dotenv";
-import Database from "better-sqlite3";
+import { spawnSync } from "child_process";
 
 dotenv.config();
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT) || 3000;
-// Trim: Windows .env often carries \r on the line, which would break === with the browser input.
 const CONDUCTOR_SECRET = String(process.env.CONDUCTOR_SECRET ?? "").trim();
 const PUBLIC_BASE_URL = (process.env.PUBLIC_BASE_URL || "").replace(/\/$/, "");
 
 const DATA_DIR = path.join(__dirname, "data");
-const DB_PATH = path.join(DATA_DIR, "survey.db");
-// survey.db is version-controlled: git pull before running on another machine so you load the same participants.
-// Participant Bearer tokens are stored in this file—treat repo access accordingly. Concurrent edits on two machines can yield Git merge conflicts on the binary DB.
+const LEGACY_SURVEY_DB = path.join(DATA_DIR, "survey.db");
+const PARTICIPANTS_DIR = path.join(DATA_DIR, "Participants_Data");
+// One JSON file per participant under Participants_Data/. Bearer tokens are in each file—treat repo access accordingly.
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function isParticipantId(id) {
+  return typeof id === "string" && UUID_RE.test(id.trim());
+}
 
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+if (!fs.existsSync(PARTICIPANTS_DIR)) fs.mkdirSync(PARTICIPANTS_DIR, { recursive: true });
 
-const db = new Database(DB_PATH);
+function ensureMigratedFromLegacySurveyDb() {
+  if (!fs.existsSync(LEGACY_SURVEY_DB)) return;
+  const migrateScript = path.join(__dirname, "scripts", "migrate-legacy-survey-db.mjs");
+  const { status, error } = spawnSync(process.execPath, [migrateScript], {
+    cwd: __dirname,
+    stdio: "inherit"
+  });
+  if (error) {
+    console.error("Legacy survey.db migration spawn error:", error);
+    process.exit(1);
+  }
+  if (status !== 0) {
+    console.error("Legacy survey.db migration failed.");
+    process.exit(1);
+  }
+}
 
-db.exec(`
-  CREATE TABLE IF NOT EXISTS participants (
-    id TEXT PRIMARY KEY,
-    label TEXT NOT NULL,
-    token TEXT NOT NULL,
-    created_at INTEGER NOT NULL,
-    updated_at INTEGER NOT NULL,
-    survey_json TEXT NOT NULL DEFAULT '{}'
-  );
-`);
+ensureMigratedFromLegacySurveyDb();
+
+function participantFilePath(id) {
+  return path.join(PARTICIPANTS_DIR, `${id}.json`);
+}
+
+function readParticipant(id) {
+  const fp = participantFilePath(id);
+  if (!fs.existsSync(fp)) return null;
+  try {
+    return JSON.parse(fs.readFileSync(fp, "utf8"));
+  } catch {
+    return null;
+  }
+}
+
+function writeParticipantAtomic(record) {
+  const fp = participantFilePath(record.id);
+  const dir = path.dirname(fp);
+  const tmp = path.join(dir, `.${record.id}.${process.pid}.${Date.now()}.tmp`);
+  fs.writeFileSync(tmp, JSON.stringify(record));
+  fs.renameSync(tmp, fp);
+}
+
+function listParticipantsSortedByUpdatedDesc() {
+  let names = [];
+  try {
+    names = fs.readdirSync(PARTICIPANTS_DIR).filter((n) => n.endsWith(".json"));
+  } catch {
+    return [];
+  }
+  const out = [];
+  for (const n of names) {
+    const id = n.slice(0, -5);
+    if (!isParticipantId(id)) continue;
+    const rec = readParticipant(id);
+    if (!rec || typeof rec !== "object" || typeof rec.updatedAt !== "number") continue;
+    out.push(rec);
+  }
+  out.sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0));
+  return out;
+}
 
 function randomToken() {
   return crypto.randomBytes(32).toString("hex");
 }
 
-function defaultSurveyJson() {
-  return JSON.stringify({
+function defaultSurvey() {
+  return {
     industry: {
       companyName: "",
       roleKey: "",
@@ -57,14 +110,16 @@ function defaultSurveyJson() {
       ibx: { segments: [], totalCostGold: 0 }
     },
     ibxLine: { loaded: false }
-  });
+  };
 }
 
+/** @param {Record<string, unknown>} row participant record row */
 function authParticipant(req, res, row) {
   const auth = req.headers.authorization || "";
   const m = auth.match(/^Bearer\s+(.+)$/i);
   const token = m ? m[1].trim() : "";
-  if (!token || token !== row.token) {
+  const rowToken = typeof row.token === "string" ? row.token : "";
+  if (!token || token !== rowToken) {
     res.status(401).json({ error: "Invalid or missing participant token" });
     return false;
   }
@@ -84,30 +139,37 @@ app.post("/api/participants", (req, res) => {
   const id = crypto.randomUUID();
   const token = randomToken();
   const now = Date.now();
-  const survey_json = defaultSurveyJson();
 
-  db.prepare(
-    `INSERT INTO participants (id, label, token, created_at, updated_at, survey_json)
-     VALUES (@id, @label, @token, @created_at, @updated_at, @survey_json)`
-  ).run({ id, label, token, created_at: now, updated_at: now, survey_json });
+  const record = {
+    id,
+    label,
+    token,
+    createdAt: now,
+    updatedAt: now,
+    survey: defaultSurvey()
+  };
 
-  const base =
-    PUBLIC_BASE_URL ||
-    `${req.protocol}://${req.get("host")}`;
+  writeParticipantAtomic(record);
+
+  const base = PUBLIC_BASE_URL || `${req.protocol}://${req.get("host")}`;
   const url = `${base}/sub.html?participant=${encodeURIComponent(id)}&token=${encodeURIComponent(token)}`;
 
   res.json({ id, label, token, shareUrl: url });
 });
 
 app.get("/api/participant/:id", (req, res) => {
-  const row = db.prepare(`SELECT * FROM participants WHERE id = ?`).get(req.params.id);
+  const pid = req.params.id;
+  if (!isParticipantId(pid)) return res.status(400).json({ error: "Invalid participant id" });
+  const row = readParticipant(pid);
   if (!row) return res.status(404).json({ error: "Not found" });
   if (!authParticipant(req, res, row)) return;
-  res.json(JSON.parse(row.survey_json));
+  res.json(row.survey ?? {});
 });
 
 app.put("/api/participant/:id", (req, res) => {
-  const row = db.prepare(`SELECT * FROM participants WHERE id = ?`).get(req.params.id);
+  const pid = req.params.id;
+  if (!isParticipantId(pid)) return res.status(400).json({ error: "Invalid participant id" });
+  const row = readParticipant(pid);
   if (!row) return res.status(404).json({ error: "Not found" });
   if (!authParticipant(req, res, row)) return;
 
@@ -115,36 +177,36 @@ app.put("/api/participant/:id", (req, res) => {
   if (!body || typeof body !== "object") {
     return res.status(400).json({ error: "Expected JSON object" });
   }
-  const survey_json = JSON.stringify(body);
   const now = Date.now();
-  db.prepare(
-    `UPDATE participants SET survey_json = @survey_json, updated_at = @updated_at WHERE id = @id`
-  ).run({ survey_json, updated_at: now, id: req.params.id });
+  const next = { ...row, survey: body, updatedAt: now };
+  writeParticipantAtomic(next);
   res.json({ ok: true, updatedAt: now });
 });
 
 app.get("/api/conductor/participants", (req, res) => {
   if (!authConductor(req, res)) return;
-  const rows = db.prepare(`SELECT id, label, created_at, updated_at FROM participants ORDER BY updated_at DESC`).all();
+  const rows = listParticipantsSortedByUpdatedDesc();
   const list = rows.map((r) => {
     let locCount = 0;
     let segCurrent = 0;
     let segIbx = 0;
     let industryCompany = "";
     try {
-      const s = JSON.parse(db.prepare(`SELECT survey_json FROM participants WHERE id = ?`).get(r.id).survey_json);
-      locCount = s.locations?.length ?? 0;
-      segCurrent = s.routes?.current?.segments?.length ?? 0;
-      segIbx = s.routes?.ibx?.segments?.length ?? 0;
-      industryCompany = String(s.industry?.companyName ?? "").trim();
+      const s = r.survey;
+      if (s && typeof s === "object") {
+        locCount = s.locations?.length ?? 0;
+        segCurrent = s.routes?.current?.segments?.length ?? 0;
+        segIbx = s.routes?.ibx?.segments?.length ?? 0;
+        industryCompany = String(s.industry?.companyName ?? "").trim();
+      }
     } catch {
       // ignore
     }
     return {
       id: r.id,
       label: r.label,
-      createdAt: r.created_at,
-      updatedAt: r.updated_at,
+      createdAt: r.createdAt,
+      updatedAt: r.updatedAt,
       industryCompany: industryCompany ? industryCompany.slice(0, 80) : "",
       counts: { locations: locCount, currentSegments: segCurrent, ibxSegments: segIbx }
     };
@@ -154,13 +216,15 @@ app.get("/api/conductor/participants", (req, res) => {
 
 app.get("/api/conductor/participants/:id", (req, res) => {
   if (!authConductor(req, res)) return;
-  const row = db.prepare(`SELECT id, label, survey_json, updated_at FROM participants WHERE id = ?`).get(req.params.id);
+  const pid = req.params.id;
+  if (!isParticipantId(pid)) return res.status(400).json({ error: "Invalid participant id" });
+  const row = readParticipant(pid);
   if (!row) return res.status(404).json({ error: "Not found" });
   res.json({
     id: row.id,
     label: row.label,
-    updatedAt: row.updated_at,
-    state: JSON.parse(row.survey_json)
+    updatedAt: row.updatedAt,
+    state: row.survey ?? {}
   });
 });
 
@@ -168,8 +232,10 @@ app.delete("/api/conductor/participants/:id", (req, res) => {
   if (!authConductor(req, res)) return;
   const id = String(req.params.id || "");
   if (!id) return res.status(400).json({ error: "Missing id" });
-  const info = db.prepare(`DELETE FROM participants WHERE id = ?`).run(id);
-  if (info.changes === 0) return res.status(404).json({ error: "Not found" });
+  if (!isParticipantId(id)) return res.status(400).json({ error: "Invalid participant id" });
+  const fp = participantFilePath(id);
+  if (!fs.existsSync(fp)) return res.status(404).json({ error: "Not found" });
+  fs.unlinkSync(fp);
   res.json({ ok: true });
 });
 
