@@ -2019,6 +2019,35 @@ body[data-survey-mode="conductor"] .conductorParticipantMirror .participantAside
   gap: 8px;
 }
 
+.conductorCostViewBtn {
+  text-align: center;
+}
+
+.conductorCostViewBtn.is-active {
+  background: #3d2a32;
+  color: #fff;
+  border-color: #3d2a32;
+}
+
+.costViewLegend {
+  margin-top: 6px;
+}
+
+.costViewLegend__bar {
+  height: 8px;
+  border-radius: 2px;
+  background: linear-gradient(to right, rgba(74,204,255,1) 0%, rgba(255,89,252,1) 50%, rgba(255,0,0,1) 100%);
+}
+
+.costViewLegend__labels {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 3px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
 .participantPicker {
   display: grid;
   grid-template-columns: 140px 1fr;
@@ -2297,7 +2326,7 @@ body[data-survey-mode="conductor"] #app {
 
 .conductorFilterBar .manifestFilterGrid {
   display: grid;
-  grid-template-columns: 0.84fr 1fr auto;
+  grid-template-columns: 0.84fr 0.6fr auto;
   gap: 16px;
   align-items: start;
 }
@@ -2503,6 +2532,43 @@ body[data-survey-mode="conductor"] #map {
 .condCard__statValue {
   font-size: 13px;
   font-weight: 700;
+}
+
+.condCard__statDivider {
+  height: 1px;
+  background: var(--border);
+  margin: 6px 0;
+}
+
+.condCard__statSectionLabel {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  padding: 0 2px 4px;
+}
+
+.condCard__statBranchLabel {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text);
+  padding: 8px 2px 2px;
+  margin-top: 2px;
+}
+
+.condCard__statRow--total {
+  background: rgba(61, 42, 50, 0.05);
+  border-color: rgba(61, 42, 50, 0.18);
+}
+
+.condCard__statRow--total .condCard__statLabel {
+  font-weight: 700;
+  color: var(--text);
+}
+
+.condCard__statRow--total .condCard__statValue {
+  color: var(--accent);
 }
 
 .condCard__exportTitle {

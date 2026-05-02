@@ -86,6 +86,7 @@
               <span id="conductorLeftDetailName" class="is-hidden"></span>
               <div id="conductorLeftShell" class="is-hidden"></div>
               <div id="conductorLeftDetail" class="is-hidden"></div>
+              <div id="conductorRawCostBreakdown" class="condCard__costBreakdown"></div>
             </div>
           </div>
 
@@ -98,6 +99,7 @@
             <div class="condCard__body" id="condCardBody_product">
               <p id="conductorProductDetailPlaceholder" class="condCard__emptyMsg is-hidden"></p>
               <div id="conductorProductDiagramMount" class="supplyChainDiagramMount supplyChainDiagramMount--left supplyChainDiagramMount--sidebarReadonly"></div>
+              <div id="conductorProductCostBreakdown" class="condCard__costBreakdown"></div>
             </div>
           </div>
 
@@ -191,9 +193,17 @@
               </div>
             </section>
             <section class="manifestFilterSection">
-              <h3 class="manifestFilterSection__title">Analyze</h3>
+              <h3 class="manifestFilterSection__title">Analysis</h3>
               <div class="manifestAnalyzeActions">
-                <button class="primaryBtn" type="button" onclick="window.open('analysis.html','_blank')">Start Analysis</button>
+                <button class="primaryBtn" type="button" onclick="window.open('analysis.html','_blank')">Summary Page</button>
+                <button class="ghostBtn conductorCostViewBtn" id="costViewToggleBtn" type="button">Cost View</button>
+              </div>
+              <div class="costViewLegend is-hidden" id="costViewLegend">
+                <div class="costViewLegend__bar"></div>
+                <div class="costViewLegend__labels">
+                  <span id="costViewLegendMin"></span>
+                  <span id="costViewLegendMax"></span>
+                </div>
               </div>
             </section>
           </div>

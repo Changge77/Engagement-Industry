@@ -16,27 +16,28 @@ let saveDebounceTimer = null;
 let viewingParticipantId = null;
 let viewingParticipantLabel = "";
 let conductorBranchHighlightActive = false;
+let conductorCostViewActive = false;
 
 /** Participant map only: short company-location hint follows pointer while over the map. */
 let companyBannerPointerOnMap = false;
 let rawMaterialOriginBannerPointerOnMap = false;
 
-const COST_PER_MILE_GOLD = {
-  huge: 1.0,
-  small: 0.5,
-  train: 0.7,
-  ibx: 0.7
+const COST_PER_MILE_DOLLARS = { 
+  huge: 2.5,
+  small: 1.1,
+  train: 0.8,
 };
 
-const TRANSFER_COST_GOLD = {
-  // Symmetric transfers between modes (your confirmation).
-  "huge->small": 0.2,
-  "small->huge": 0.2,
-  "train->small": 0.1,
-  "small->train": 0.1,
-  "train->huge": 0.5,
-  "huge->train": 0.5
+const TRANSFER_COST_DOLLARS = {
+  "huge->small": 40,
+  "small->huge": 40,
+  "train->small": 80,
+  "small->train": 80,
+  "train->huge": 120,
+  "huge->train": 120
 };
+
+const TRANSPORT_MODE_LABELS = { huge: "Huge Truck", small: "Small Truck", train: "Train", others: "Others" };
 
 const LOCATION_TYPES = {
   workplace: { label: "Workplace (your company)", color: "#c94f7c" },
@@ -233,7 +234,7 @@ function normalizeRawMaterialBranchesFromPayload(rawMaterials, branchesIn) {
       const n = Number(tc);
       if (Number.isFinite(n) && n >= 1) tripFrequencyCount = Math.floor(n);
     }
-    out.push({
+    const entry = {
       originCategoryKey,
       originOtherDetail: String(b.originOtherDetail ?? ""),
       originX: typeof ox === "number" && Number.isFinite(ox) ? ox : null,
@@ -244,7 +245,11 @@ function normalizeRawMaterialBranchesFromPayload(rawMaterials, branchesIn) {
       supplyChainTransportRoutes: normalizeSupplyChainTransportRoutesForBranch(b.supplyChainTransportRoutes, diagram),
       tripFrequencyCount,
       tripFrequencyPeriod: normalizeTripFrequencyPeriod(b.tripFrequencyPeriod)
-    });
+    };
+    // Preserve conductor participant-tagging metadata (set by buildMergedConductorPayload)
+    if (b._participantId != null) entry._participantId = b._participantId;
+    if (b._localBranchIndex != null) entry._localBranchIndex = b._localBranchIndex;
+    out.push(entry);
   }
   return out;
 }
@@ -1769,11 +1774,22 @@ function addSupplyChainBranchRoutePolylinesToLayer(branches, itemLabels, kind) {
       const modeKey = d.transportLegs[li]?.modeKey ?? "";
       const color = getSupplyChainTransportRouteColor(modeKey, kind);
       const line = L.polyline(latlngs, createModePolylineStyle(color, false));
-      line._conductorTransportMode = conductorTransportFilterKey(modeKey);
+      const scMode = conductorTransportFilterKey(modeKey);
+      const scDistCost = (COST_PER_MILE_DOLLARS[scMode] ?? 0) * lineLengthMiles(latlngs);
+      const prevScModeKey = li > 0 ? (d.transportLegs[li - 1]?.modeKey ?? "") : null;
+      const prevScMode = prevScModeKey != null ? conductorTransportFilterKey(prevScModeKey) : null;
+      const scXferCost = prevScMode && prevScMode !== scMode
+        ? (TRANSFER_COST_DOLLARS[`${prevScMode}->${scMode}`] ?? 0) : 0;
+      const scPid = b._participantId ?? viewingParticipantId ?? null;
+      const scLbi = b._localBranchIndex ?? bi;
+      line._conductorTransportMode = scMode;
+      line._originalColor = color;
+      line._segmentCostDollars = scDistCost + scXferCost;
       line._conductorBranchKind = kind;
       line._conductorBranchIndex = bi;
-      line._conductorParticipantId = b._participantId ?? viewingParticipantId ?? null;
-      line._conductorLocalBranchIndex = b._localBranchIndex ?? bi;
+      line._conductorParticipantId = scPid;
+      line._conductorLocalBranchIndex = scLbi;
+      line._conductorRouteKey = `sc:${scPid}:${kind}:${scLbi}`;
       const modeLab = formatSupplyChainTransportModeLabel(d.transportLegs[li]);
       line.bindPopup(
         `${escapeHtml(itemLabel)} · Transportation ${li + 1} (${escapeHtml(modeLab)}) · ${routeSuffix}`
@@ -2163,18 +2179,44 @@ function rebuildFromState() {
     BRANCH_KIND_PRODUCT
   );
 
-  for (const seg of state.routes.current.segments) {
+  const currentSegs = state.routes.current.segments;
+  for (let i = 0; i < currentSegs.length; i++) {
+    const seg = currentSegs[i];
     const latlngs = surveyPointsToLatLngs(seg.points);
-    const line = L.polyline(latlngs, createModePolylineStyle(getSegmentColor("current", seg), false));
-    line._conductorTransportMode = conductorTransportFilterKey(seg.modeKey);
+    const color = getSegmentColor("current", seg);
+    const line = L.polyline(latlngs, createModePolylineStyle(color, false));
+    const mode = conductorTransportFilterKey(seg.modeKey);
+    const distCost = (COST_PER_MILE_DOLLARS[mode] ?? 0) * (Number(seg.lengthMiles) || 0);
+    const prevMode = i > 0 ? conductorTransportFilterKey(currentSegs[i - 1].modeKey) : null;
+    const xferCost = prevMode && prevMode !== mode ? (TRANSFER_COST_DOLLARS[`${prevMode}->${mode}`] ?? 0) : 0;
+    const routePid = seg._participantId ?? viewingParticipantId ?? "none";
+    line._conductorTransportMode = mode;
+    line._conductorParticipantId = routePid !== "none" ? routePid : null;
+    line._conductorRouteKey = `current:${routePid}`;
+    line._originalColor = color;
+    line._segmentLengthMiles = seg.lengthMiles;
+    line._segmentCostDollars = distCost + xferCost;
     line.bindPopup(buildSegmentPopup(seg, "Current"));
     layers.currentRoutes.addLayer(line);
   }
 
-  for (const seg of state.routes.ibx.segments) {
+  const ibxSegs = state.routes.ibx.segments;
+  for (let i = 0; i < ibxSegs.length; i++) {
+    const seg = ibxSegs[i];
     const latlngs = surveyPointsToLatLngs(seg.points);
-    const line = L.polyline(latlngs, createModePolylineStyle(getSegmentColor("ibx", seg), false));
-    line._conductorTransportMode = conductorTransportFilterKey(seg.modeKey);
+    const color = getSegmentColor("ibx", seg);
+    const line = L.polyline(latlngs, createModePolylineStyle(color, false));
+    const mode = conductorTransportFilterKey(seg.modeKey);
+    const distCost = (COST_PER_MILE_DOLLARS[mode] ?? 0) * (Number(seg.lengthMiles) || 0);
+    const prevMode = i > 0 ? conductorTransportFilterKey(ibxSegs[i - 1].modeKey) : null;
+    const xferCost = prevMode && prevMode !== mode ? (TRANSFER_COST_DOLLARS[`${prevMode}->${mode}`] ?? 0) : 0;
+    const routePid = seg._participantId ?? viewingParticipantId ?? "none";
+    line._conductorTransportMode = mode;
+    line._conductorParticipantId = routePid !== "none" ? routePid : null;
+    line._conductorRouteKey = `ibx:${routePid}`;
+    line._originalColor = color;
+    line._segmentLengthMiles = seg.lengthMiles;
+    line._segmentCostDollars = distCost + xferCost;
     line.bindPopup(buildSegmentPopup(seg, "IBX Assumption"));
     layers.ibxRoutes.addLayer(line);
   }
@@ -2213,6 +2255,8 @@ function rebuildFromState() {
   syncConductorParticipantLeftPanel();
 
   uiUpdateStats();
+
+  if (SURVEY_MODE === "conductor" && conductorCostViewActive) applyConductorCostView();
 }
 
 function uiUpdateStats() {
@@ -4502,7 +4546,7 @@ function renderSupplyChainDiagramMount(materialIndex, options = {}) {
     String(items[materialIndex] ?? "").trim() ||
     (branchKind === BRANCH_KIND_PRODUCT ? "this product" : "this material");
   const showTripFreqLeft =
-    (mountId === "participantLeftDiagramMount" && SURVEY_MODE === "participant") ||
+    (isParticipantActiveDiagramMount(mountId) && SURVEY_MODE === "participant") ||
     (mountId === "conductorLeftDiagramMount" && SURVEY_MODE === "conductor");
   const showTripFreqLeftResolved =
     showTripFreqLeft &&
@@ -4513,9 +4557,9 @@ function renderSupplyChainDiagramMount(materialIndex, options = {}) {
   const originIcon = originIconSrcForSupplyChain(br);
   const destIconSrc = destinationIconSrcForSupplyChainDiagram(d);
   const destSummaryText = formatSupplyChainDestinationDesc(d);
-  const showRedrawButtons = mountId === "participantLeftDiagramMount" && SURVEY_MODE === "participant" && !readOnly;
+  const showRedrawButtons = isParticipantActiveDiagramMount(mountId) && SURVEY_MODE === "participant" && !readOnly;
   const allowLeftOriginEdit =
-    mountId === "participantLeftDiagramMount" &&
+    isParticipantActiveDiagramMount(mountId) &&
     SURVEY_MODE === "participant" &&
     !readOnly &&
     br.originCategoryKey !== RAW_MATERIAL_ORIGIN_SKIPPED_KEY;
@@ -4722,7 +4766,7 @@ function renderSupplyChainDiagramMount(materialIndex, options = {}) {
       const nextDiagram = applySupplyChainDiagramConstraints(nextD);
       const mid = options.mountId ?? "rawMaterialSupplyChainDiagramMount";
       const mountEl = document.getElementById(mid);
-      if (mid === "participantLeftDiagramMount" && mountEl) {
+      if (isParticipantActiveDiagramMount(mid) && mountEl) {
         const o = readOriginFieldsFromDiagramMount(mountEl);
         if (o) {
           const res = applyOriginFromLeftDiagramToRow(row, nextDiagram, o);
@@ -4807,7 +4851,7 @@ function renderSupplyChainDiagramMount(materialIndex, options = {}) {
       applyDiagram(next);
     });
     mount.querySelector('[data-sc="origin-place-map"]')?.addEventListener("click", () => {
-      if ((options.mountId ?? "rawMaterialSupplyChainDiagramMount") !== "participantLeftDiagramMount") return;
+      if (!isParticipantActiveDiagramMount(options.mountId ?? "rawMaterialSupplyChainDiagramMount")) return;
       const o = readOriginFieldsFromDiagramMount(mount);
       if (!o?.originCategoryKey) {
         window.alert("Please select an originating location type.");
@@ -4850,7 +4894,7 @@ function renderSupplyChainDiagramMount(materialIndex, options = {}) {
     });
 
     const commitTripFreqFromLeft = () => {
-      if (mountId !== "participantLeftDiagramMount") return;
+      if (!isParticipantActiveDiagramMount(mountId)) return;
       const c = mount.querySelector('[data-trip-freq="count"]');
       const p = mount.querySelector('[data-trip-freq="period"]');
       ensure();
@@ -4895,12 +4939,23 @@ function syncParticipantLeftPanel() {
   const shellEl = document.getElementById("participantLeftShell");
   const pillsEl = document.getElementById("participantRawMaterialPills");
   const productPillsEl = document.getElementById("participantProductPills");
-  const detailEl = document.getElementById("participantLeftDetail");
+  if (!emptyEl) return;
+
+  const kind = ui.participantLeftPanelKind;
+
+  // Kind-aware element selection: raw vs product each have their own detail/mount/save areas
+  const isProduct = kind === BRANCH_KIND_PRODUCT;
+  const detailEl = document.getElementById(isProduct ? "participantProductDetail" : "participantLeftDetail");
+  const otherDetailEl = document.getElementById(isProduct ? "participantLeftDetail" : "participantProductDetail");
   const detailName = document.getElementById("participantLeftDetailName");
-  const placeholderEl = document.getElementById("participantLeftDetailPlaceholder");
-  const mountEl = document.getElementById("participantLeftDiagramMount");
-  const saveRow = document.getElementById("participantDiagramSaveRow");
-  if (!emptyEl || !shellEl) return;
+  const placeholderEl = document.getElementById(isProduct ? "participantProductDetailPlaceholder" : "participantLeftDetailPlaceholder");
+  const mountEl = document.getElementById(isProduct ? "participantProductDiagramMount" : "participantLeftDiagramMount");
+  const saveRow = document.getElementById(isProduct ? "participantProductDiagramSaveRow" : "participantDiagramSaveRow");
+
+  // Always hide the inactive kind's detail panel
+  if (otherDetailEl) otherDetailEl.classList.add("is-hidden");
+  const otherSaveRow = document.getElementById(isProduct ? "participantDiagramSaveRow" : "participantProductDiagramSaveRow");
+  if (otherSaveRow) otherSaveRow.classList.add("is-hidden");
 
   const mats = state.industry.rawMaterials ?? [];
   const prods = state.industry.products ?? [];
@@ -5069,6 +5124,53 @@ function syncParticipantLeftPanel() {
 /**
  * Conductor main site: mirror participant left panel (profile, pills, diagram) read-only.
  */
+function computeBranchCostDollars(branch) {
+  if (!branch) return { costByMode: {}, transferTotal: 0, totalCost: 0, totalMiles: 0 };
+  const d = normalizeSupplyChainDiagram(branch.supplyChainDiagram);
+  const routes = normalizeSupplyChainTransportRoutesForBranch(branch.supplyChainTransportRoutes, branch.supplyChainDiagram);
+  const costByMode = {};
+  let transferTotal = 0;
+  let totalMiles = 0;
+  for (let i = 0; i < routes.length; i++) {
+    const pts = routes[i]?.points;
+    if (!Array.isArray(pts) || pts.length < 2) continue;
+    const miles = lineLengthMiles(surveyPointsToLatLngs(pts));
+    const mode = conductorTransportFilterKey(d.transportLegs[i]?.modeKey ?? "");
+    totalMiles += miles;
+    const cost = (COST_PER_MILE_DOLLARS[mode] ?? 0) * miles;
+    if (cost > 0) costByMode[mode] = (costByMode[mode] ?? 0) + cost;
+    if (i > 0) {
+      const prevMode = conductorTransportFilterKey(d.transportLegs[i - 1]?.modeKey ?? "");
+      if (prevMode !== mode) transferTotal += TRANSFER_COST_DOLLARS[`${prevMode}->${mode}`] ?? 0;
+    }
+  }
+  const totalCost = Object.values(costByMode).reduce((a, b) => a + b, 0) + transferTotal;
+  return { costByMode, transferTotal, totalCost, totalMiles };
+}
+
+function renderBranchCostBreakdown(labels, branches, containerId) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  if (!viewingParticipantId || !labels?.length) { el.innerHTML = ""; return; }
+  const rows = [];
+  for (let i = 0; i < labels.length; i++) {
+    const { costByMode, transferTotal, totalCost, totalMiles } = computeBranchCostDollars(branches?.[i]);
+    if (totalCost <= 0 && totalMiles <= 0) continue;
+    const label = String(labels[i] ?? "").trim() || `Route ${i + 1}`;
+    rows.push(`<div class="condCard__statBranchLabel">${escapeHtml(label)}</div>`);
+    rows.push(`<div class="condCard__statRow"><span class="condCard__statLabel">Distance</span><span class="condCard__statValue">${totalMiles.toFixed(1)} mi</span></div>`);
+    for (const [mode, cost] of Object.entries(costByMode)) {
+      rows.push(`<div class="condCard__statRow"><span class="condCard__statLabel">${escapeHtml(TRANSPORT_MODE_LABELS[mode] ?? mode)}</span><span class="condCard__statValue">${fmtDollars(cost)}</span></div>`);
+    }
+    if (transferTotal > 0) {
+      rows.push(`<div class="condCard__statRow"><span class="condCard__statLabel">Transfers</span><span class="condCard__statValue">${fmtDollars(transferTotal)}</span></div>`);
+    }
+    rows.push(`<div class="condCard__statRow condCard__statRow--total"><span class="condCard__statLabel">Total</span><span class="condCard__statValue">${fmtDollars(totalCost)}</span></div>`);
+  }
+  if (!rows.length) { el.innerHTML = ""; return; }
+  el.innerHTML = `<div class="condCard__statDivider"></div><div class="condCard__statSectionLabel">Route Costs</div>` + rows.join("");
+}
+
 function syncConductorParticipantLeftPanel() {
   if (SURVEY_MODE !== "conductor") return;
 
@@ -5090,6 +5192,8 @@ function syncConductorParticipantLeftPanel() {
     if (emptyEl) { emptyEl.textContent = 'Select a participant using "View" to see their data.'; emptyEl.classList.remove("is-hidden"); }
     if (rawPlaceholder) rawPlaceholder.classList.add("is-hidden");
     if (productPlaceholder) productPlaceholder.classList.add("is-hidden");
+    renderBranchCostBreakdown([], null, "conductorRawCostBreakdown");
+    renderBranchCostBreakdown([], null, "conductorProductCostBreakdown");
     return;
   }
 
@@ -5155,6 +5259,9 @@ function syncConductorParticipantLeftPanel() {
       _renderConductorDiagram(BRANCH_KIND_PRODUCT, "conductorProductDiagramMount", productPlaceholder, productMountEl);
     }
   }
+
+  renderBranchCostBreakdown(mats, state.industry?.rawMaterialBranches, "conductorRawCostBreakdown");
+  renderBranchCostBreakdown(prods, state.industry?.productBranches, "conductorProductCostBreakdown");
 }
 
 function openSupplyChainDiagramGate(kind, index) {
@@ -5388,10 +5495,14 @@ function initParticipantLeftPanelOnce() {
   });
 }
 
-/* ── Conductor stacked card system ───────────────────────────── */
+/* ── Stacked card system (conductor + participant) ───────────── */
 
 const COND_CARD_IDS = ["participant", "raw", "product", "summary"];
 const COND_CARD_PEEK = 72;
+
+function isParticipantActiveDiagramMount(id) {
+  return id === "participantLeftDiagramMount" || id === "participantProductDiagramMount";
+}
 
 let conductorOpenCard = "participant";
 
@@ -5468,6 +5579,86 @@ function initSharePopup() {
   });
 }
 
+function costGradientColor(t) {
+  // rgba(74,204,255) → rgba(255,89,252) → rgba(255,0,0)
+  let r, g, b;
+  if (t <= 0.5) {
+    const s = t * 2;
+    r = Math.round(74  + (255 - 74)  * s);
+    g = Math.round(204 + (89  - 204) * s);
+    b = Math.round(255 + (252 - 255) * s);
+  } else {
+    const s = (t - 0.5) * 2;
+    r = 255;
+    g = Math.round(89  + (0   - 89)  * s);
+    b = Math.round(252 + (0   - 252) * s);
+  }
+  return `rgb(${r},${g},${b})`;
+}
+
+function allRouteLayers() {
+  const out = [];
+  for (const lg of [layers?.currentRoutes, layers?.ibxRoutes, layers?.supplyChainRoutes]) {
+    if (lg) lg.eachLayer((l) => out.push(l));
+  }
+  return out;
+}
+
+function updateCostViewLegend(min, max) {
+  const el = document.getElementById("costViewLegend");
+  if (!el) return;
+  if (min == null) { el.classList.add("is-hidden"); return; }
+  el.classList.remove("is-hidden");
+  const minEl = document.getElementById("costViewLegendMin");
+  const maxEl = document.getElementById("costViewLegendMax");
+  if (minEl) minEl.textContent = fmtDollars(min);
+  if (maxEl) maxEl.textContent = fmtDollars(max);
+}
+
+function applyConductorCostView() {
+  const lines = allRouteLayers();
+  if (!lines.length) return;
+
+  // Sum segment costs per route key to get per-route totals
+  const routeTotals = new Map();
+  for (const line of lines) {
+    const key = line._conductorRouteKey ?? `_seg_${Math.random()}`;
+    routeTotals.set(key, (routeTotals.get(key) ?? 0) + (line._segmentCostDollars ?? 0));
+  }
+
+  const costs = Array.from(routeTotals.values());
+  const max = Math.max(...costs);
+  const min = Math.min(...costs);
+  const range = max - min || 1;
+
+  for (const line of lines) {
+    const key = line._conductorRouteKey;
+    const routeCost = key != null ? (routeTotals.get(key) ?? 0) : (line._segmentCostDollars ?? 0);
+    line.setStyle({ color: costGradientColor((routeCost - min) / range) });
+  }
+
+  updateCostViewLegend(min, max);
+}
+
+function removeConductorCostView() {
+  allRouteLayers().forEach((line) => {
+    if (line._originalColor) line.setStyle({ color: line._originalColor });
+  });
+  updateCostViewLegend(null, null);
+}
+
+function initCostViewToggle() {
+  if (SURVEY_MODE !== "conductor") return;
+  const btn = document.getElementById("costViewToggleBtn");
+  if (!btn) return;
+  btn.addEventListener("click", () => {
+    conductorCostViewActive = !conductorCostViewActive;
+    btn.classList.toggle("is-active", conductorCostViewActive);
+    if (conductorCostViewActive) applyConductorCostView();
+    else removeConductorCostView();
+  });
+}
+
 function updateConductorRouteHighlight() {
   if (!layers?.supplyChainRoutes) return;
   const BASE_WEIGHT = 5;
@@ -5529,6 +5720,54 @@ function updateCondCardParticipantSummary() {
   }
 }
 
+function computeParticipantRouteCostDollars() {
+  const costByMode = {};
+  let transferTotal = 0;
+  let totalMiles = 0;
+
+  const addSegCost = (modeKey, miles, prevModeKey) => {
+    const mode = conductorTransportFilterKey(modeKey);
+    const m = Number(miles) || 0;
+    totalMiles += m;
+    const cost = (COST_PER_MILE_DOLLARS[mode] ?? 0) * m;
+    if (cost > 0) costByMode[mode] = (costByMode[mode] ?? 0) + cost;
+    if (prevModeKey != null) {
+      const prevMode = conductorTransportFilterKey(prevModeKey);
+      if (prevMode !== mode) transferTotal += TRANSFER_COST_DOLLARS[`${prevMode}->${mode}`] ?? 0;
+    }
+  };
+
+  const currentSegs = state.routes?.current?.segments ?? [];
+  for (let i = 0; i < currentSegs.length; i++)
+    addSegCost(currentSegs[i].modeKey, currentSegs[i].lengthMiles, i > 0 ? currentSegs[i - 1].modeKey : null);
+
+  const ibxSegs = state.routes?.ibx?.segments ?? [];
+  for (let i = 0; i < ibxSegs.length; i++)
+    addSegCost(ibxSegs[i].modeKey, ibxSegs[i].lengthMiles, i > 0 ? ibxSegs[i - 1].modeKey : null);
+
+  for (const branches of [state.industry?.rawMaterialBranches ?? [], state.industry?.productBranches ?? []]) {
+    for (const branch of branches) {
+      if (!branch) continue;
+      const d = normalizeSupplyChainDiagram(branch.supplyChainDiagram);
+      const routes = normalizeSupplyChainTransportRoutesForBranch(branch.supplyChainTransportRoutes, branch.supplyChainDiagram);
+      for (let i = 0; i < routes.length; i++) {
+        const pts = routes[i]?.points;
+        if (!Array.isArray(pts) || pts.length < 2) continue;
+        const miles = lineLengthMiles(surveyPointsToLatLngs(pts));
+        const prevModeKey = i > 0 ? (d.transportLegs[i - 1]?.modeKey ?? null) : null;
+        addSegCost(d.transportLegs[i]?.modeKey ?? "", miles, prevModeKey);
+      }
+    }
+  }
+
+  const distTotal = Object.values(costByMode).reduce((a, b) => a + b, 0);
+  return { costByMode, transferTotal, total: distTotal + transferTotal, totalMiles };
+}
+
+function fmtDollars(n) {
+  return "$" + n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
 function updateCondCardSummaryStats() {
   const el = document.getElementById("conductorSummaryStats");
   const previewEl = document.getElementById("condCardSummaryPreview");
@@ -5544,6 +5783,8 @@ function updateCondCardSummaryStats() {
     const mode = seg.modeKey ?? "other";
     milesByMode[mode] = (milesByMode[mode] ?? 0) + (Number(seg.lengthMiles) || 0);
   }
+
+  const { costByMode, transferTotal, total: totalCost, totalMiles } = computeParticipantRouteCostDollars();
 
   const totalLocs = Object.values(locCounts).reduce((a, b) => a + b, 0);
   const totalModes = Object.keys(milesByMode).length;
@@ -5565,6 +5806,24 @@ function updateCondCardSummaryStats() {
     const label = SUPPLY_CHAIN_TRANSPORT_MODE_OPTIONS.find((o) => o.key === mode)?.label ?? mode;
     html += `<div class="condCard__statRow"><span class="condCard__statLabel">${escapeHtml(label)}</span><span class="condCard__statValue">${miles.toFixed(1)} mi</span></div>`;
   }
+
+  if (totalCost > 0 || totalMiles > 0) {
+    html += `<div class="condCard__statDivider"></div>`;
+    html += `<div class="condCard__statSectionLabel">Cost Estimate</div>`;
+    if (totalMiles > 0) {
+      html += `<div class="condCard__statRow"><span class="condCard__statLabel">Total Distance</span><span class="condCard__statValue">${totalMiles.toFixed(1)} mi</span></div>`;
+    }
+    for (const [mode, cost] of Object.entries(costByMode)) {
+      html += `<div class="condCard__statRow"><span class="condCard__statLabel">${escapeHtml(TRANSPORT_MODE_LABELS[mode] ?? mode)}</span><span class="condCard__statValue">${fmtDollars(cost)}</span></div>`;
+    }
+    if (transferTotal > 0) {
+      html += `<div class="condCard__statRow"><span class="condCard__statLabel">Transfers</span><span class="condCard__statValue">${fmtDollars(transferTotal)}</span></div>`;
+    }
+    if (totalCost > 0) {
+      html += `<div class="condCard__statRow condCard__statRow--total"><span class="condCard__statLabel">Total</span><span class="condCard__statValue">${fmtDollars(totalCost)}</span></div>`;
+    }
+  }
+
   if (!html) html = `<p class="condCard__emptyMsg">No data to summarise yet.</p>`;
   el.innerHTML = html;
 }
@@ -5700,7 +5959,7 @@ function initParticipantRawMaterialSupplyChainDiagramOnce() {
     ensure();
     const mount = document.getElementById(mountId);
     let prevRow = state.industry[branchesKey][idx];
-    if (mountId === "participantLeftDiagramMount" && mount) {
+    if (isParticipantActiveDiagramMount(mountId) && mount) {
       const o = readOriginFieldsFromDiagramMount(mount);
       if (o) {
         const res = applyOriginFromLeftDiagramToRow(prevRow, collected, o);
@@ -6132,8 +6391,12 @@ function buildMergedConductorPayload(rows) {
     const payload = row?.state;
     if (!payload) continue;
     merged.locations.push(...(cloneJson(payload.locations) ?? []));
-    merged.routes.current.segments.push(...(cloneJson(payload.routes?.current?.segments) ?? []));
-    merged.routes.ibx.segments.push(...(cloneJson(payload.routes?.ibx?.segments) ?? []));
+    const currentSegs = cloneJson(payload.routes?.current?.segments) ?? [];
+    currentSegs.forEach((s) => { if (s) s._participantId = row.id; });
+    merged.routes.current.segments.push(...currentSegs);
+    const ibxSegs = cloneJson(payload.routes?.ibx?.segments) ?? [];
+    ibxSegs.forEach((s) => { if (s) s._participantId = row.id; });
+    merged.routes.ibx.segments.push(...ibxSegs);
     const ind = payload.industry ?? {};
     merged.industry.rawMaterials.push(...(cloneJson(ind.rawMaterials) ?? []));
     const rmBranches = cloneJson(ind.rawMaterialBranches) ?? [];
@@ -6203,9 +6466,38 @@ function populateParticipantDeleteList(ul, list, currentId, selectedIds) {
     selectBtn.textContent = `${p.label} · ${t.toLocaleString()} · ${p.counts.locations} loc / ${p.counts.currentSegments + p.counts.ibxSegments} seg${ind}`;
     selectBtn.title = "Select participant for map filter";
     selectBtn.addEventListener("click", async () => {
-      if (selectedIds.has(p.id)) selectedIds.delete(p.id);
+      const wasSelected = selectedIds.has(p.id);
+      if (wasSelected) selectedIds.delete(p.id);
       else selectedIds.add(p.id);
-      if (!viewingParticipantId) await applyConductorSelectionToMap();
+
+      const removingViewed = wasSelected && p.id === viewingParticipantId;
+      if (removingViewed) {
+        // Clear the sidebar before the map rebuild so syncConductorParticipantLeftPanel
+        // sees viewingParticipantId = null and renders the empty state.
+        viewingParticipantId = null;
+        viewingParticipantLabel = "";
+        conductorBranchHighlightActive = false;
+        const lbl = document.getElementById("conductorViewingLabel");
+        if (lbl) lbl.textContent = "";
+      }
+
+      // Always rebuild the map. Bypass the viewingParticipantId guard so this works
+      // even when another participant is still open in the sidebar.
+      const savedId = viewingParticipantId;
+      viewingParticipantId = null;
+      await applyConductorSelectionToMap();
+      viewingParticipantId = savedId;
+
+      if (savedId && !removingViewed) {
+        // applyConductorSelectionToMap overwrote state with the merged payload.
+        // Re-apply the viewed participant's state so the sidebar stays correct.
+        const data = await getConductorParticipantState(savedId);
+        applySurveyPayload(data.state, { persist: false });
+        uiUpdateStats();
+        syncConductorParticipantLeftPanel();
+      }
+
+      updateConductorRouteHighlight();
       renderFilteredParticipantList();
     });
 
@@ -6537,6 +6829,7 @@ async function initConductorSurveyUi() {
   initCondCardResize();
   requestAnimationFrame(() => layoutCondCards());
   initConductorLeftPanelOnce();
+  initCostViewToggle();
   syncConductorParticipantLeftPanel();
   resetConductorFeatureFilters();
   // Map was created after #app became visible; still refresh tile/layout after flex settles.
