@@ -84,12 +84,13 @@
 
       /* ── Section headings ── */
       .sectionTitle {
-        font-size: 13px;
-        font-weight: 700;
+        font-size: 16px;
+        font-weight: 800;
         text-transform: uppercase;
         letter-spacing: 0.06em;
         color: var(--muted);
         margin: 0 0 12px 0;
+        line-height: 1.3;
       }
 
       .sectionBlock {
@@ -440,15 +441,6 @@
         margin-top: 24px;
       }
 
-      .dependencySection__title {
-        font-size: 12px;
-        font-weight: 800;
-        text-transform: uppercase;
-        letter-spacing: 0.06em;
-        color: var(--muted);
-        margin: 0 0 12px 0;
-      }
-
       .dependencyChartGrid {
         display: grid;
         grid-template-columns: 1fr;
@@ -459,6 +451,19 @@
       .dependencyChartGrid > .panelCard {
         width: 100%;
         max-width: none;
+      }
+
+      .dependencyChartGrid .panelCard__title {
+        font-size: 17px;
+        line-height: 1.35;
+        margin-bottom: 10px;
+      }
+
+      .dependencyChartGrid .panelCard__hint {
+        font-size: 14px;
+        line-height: 1.4;
+        font-weight: 600;
+        margin: -4px 0 14px 0;
       }
 
       .barChartHost {
@@ -614,12 +619,28 @@
         </div>
 
         <div class="dependencySection">
-          <p class="dependencySection__title">Transportation mode dependency</p>
+          <p class="sectionTitle">Transportation mode dependency</p>
           <div class="dependencyChartGrid">
             <div class="panelCard">
               <p class="panelCard__title">Huge truck dependency</p>
-              <p class="panelCard__hint">leg Distance × Trips/Month. Y-axis ticks every 100; vertical range auto-fits the data (baseline is the lowest tick, not necessarily zero).</p>
+              <p class="panelCard__hint">Huge Truck Route Distance × Trips/Month</p>
               <div id="hugeTruckDependencyChart" class="barChartHost">
+                <div class="emptyMsg">Loading<span class="loadingDots"></span></div>
+              </div>
+            </div>
+
+            <div class="panelCard">
+              <p class="panelCard__title">Small truck dependency</p>
+              <p class="panelCard__hint">Small Truck Route Distance × Trips/Month</p>
+              <div id="smallTruckDependencyChart" class="barChartHost">
+                <div class="emptyMsg">Loading<span class="loadingDots"></span></div>
+              </div>
+            </div>
+
+            <div class="panelCard">
+              <p class="panelCard__title">Train &amp; rail dependency</p>
+              <p class="panelCard__hint">Train &amp; Rail Route Distance × Trips/Month</p>
+              <div id="trainRailDependencyChart" class="barChartHost">
                 <div class="emptyMsg">Loading<span class="loadingDots"></span></div>
               </div>
             </div>
@@ -812,14 +833,17 @@
         return 0;
       }
 
-      function branchHugeTruckMilesOnly(b) {
+      /** Miles on drawn legs whose mode matches `transportModeKey` (survey diagram keys, e.g. huge_truck / small_truck). */
+      function branchTransportMilesForMode(b, transportModeKey) {
         if (!b || typeof b !== "object") return 0;
+        const want = String(transportModeKey ?? "").trim();
+        if (!want) return 0;
         const diag = b.supplyChainDiagram ?? {};
         const legs = diag.transportLegs ?? [];
         const drawn = b.supplyChainTransportRoutes ?? [];
         let miles = 0;
         for (let i = 0; i < legs.length; i++) {
-          if (String(legs[i]?.modeKey ?? "").trim() !== "huge_truck") continue;
+          if (String(legs[i]?.modeKey ?? "").trim() !== want) continue;
           const pts = drawn[i]?.points;
           if (!Array.isArray(pts) || pts.length < 2) continue;
           const latlngs = surveyAnalysisPointsToLatLngs(pts);
@@ -829,7 +853,7 @@
         return miles;
       }
 
-      function participantHugeTruckDependencyPerMonth(industry) {
+      function participantModeDependencyPerMonth(industry, transportModeKey) {
         if (!industry || typeof industry !== "object") return 0;
         const branches = [...(industry.rawMaterialBranches ?? []), ...(industry.productBranches ?? [])];
         let sum = 0;
@@ -837,7 +861,7 @@
           if (!b) continue;
           const tpm = tripsPerMonthFromBranch(b);
           if (tpm <= 0) continue;
-          sum += branchHugeTruckMilesOnly(b) * tpm;
+          sum += branchTransportMilesForMode(b, transportModeKey) * tpm;
         }
         return sum;
       }
@@ -1131,8 +1155,9 @@
           errorBanner.style.display = "block";
           errorBanner.textContent = `Could not load participants: ${err.message}`;
           subtitle.textContent = "Error loading data";
-          const hdc = document.getElementById("hugeTruckDependencyChart");
-          if (hdc) hdc.innerHTML = '<p class="emptyMsg" style="padding:16px 0">No data</p>';
+          document.querySelectorAll("[id$='DependencyChart']").forEach((el) => {
+            el.innerHTML = '<p class="emptyMsg" style="padding:16px 0">No data</p>';
+          });
           return;
         }
 
@@ -1152,8 +1177,9 @@
           });
           ["participantsRolesBreakdownList","locationsBreakdownList","routesBreakdownList","companiesBreakdownList","rawMaterialsOverviewBreakdownList","productsOverviewBreakdownList"]
             .forEach(id => { document.getElementById(id).innerHTML = '<p class="emptyMsg" style="padding:16px 0">No data</p>'; });
-          const hdc = document.getElementById("hugeTruckDependencyChart");
-          if (hdc) hdc.innerHTML = '<p class="emptyMsg" style="padding:16px 0">No data</p>';
+          document.querySelectorAll("[id$='DependencyChart']").forEach((el) => {
+            el.innerHTML = '<p class="emptyMsg" style="padding:16px 0">No data</p>';
+          });
           return;
         }
 
@@ -1197,9 +1223,15 @@
         let segOther = 0;
         let supplyChainCount = 0;
 
-        /** Per goods category: Σ participant huge-truck dependency (full amount to each selected category). */
+        /** Per goods category: Σ participant mode dependency (full amount to each selected category). */
         const hugeDepByCat = new Map();
-        for (const key of GOODS_CATEGORY_AXIS_ORDER) hugeDepByCat.set(key, 0);
+        const smallDepByCat = new Map();
+        const trainDepByCat = new Map();
+        for (const key of GOODS_CATEGORY_AXIS_ORDER) {
+          hugeDepByCat.set(key, 0);
+          smallDepByCat.set(key, 0);
+          trainDepByCat.set(key, 0);
+        }
 
         for (const d of valid) {
           const ind = d.state?.industry ?? {};
@@ -1285,10 +1317,14 @@
             else if (typeof p === "string" && p) allProducts.push(p.trim());
           }
 
-          const hugeTotal = participantHugeTruckDependencyPerMonth(ind);
+          const hugeTotal = participantModeDependencyPerMonth(ind, "huge_truck");
+          const smallTotal = participantModeDependencyPerMonth(ind, "small_truck");
+          const trainTotal = participantModeDependencyPerMonth(ind, "train");
           const hugeCats = participantGoodsCategoriesForDependency(ind);
           for (const cat of hugeCats) {
             hugeDepByCat.set(cat, (hugeDepByCat.get(cat) ?? 0) + hugeTotal);
+            smallDepByCat.set(cat, (smallDepByCat.get(cat) ?? 0) + smallTotal);
+            trainDepByCat.set(cat, (trainDepByCat.get(cat) ?? 0) + trainTotal);
           }
         }
 
@@ -1394,6 +1430,22 @@
         }));
         renderVerticalBarChart("hugeTruckDependencyChart", hugeTruckDepItems, {
           yAxisLabel: "Huge Truck Dependency / Month"
+        });
+
+        const smallTruckDepItems = GOODS_CATEGORY_AXIS_ORDER.map((k) => ({
+          label: GOODS_CATEGORY_LABELS[k] ?? k,
+          value: smallDepByCat.get(k) ?? 0
+        }));
+        renderVerticalBarChart("smallTruckDependencyChart", smallTruckDepItems, {
+          yAxisLabel: "Small Truck Dependency / Month"
+        });
+
+        const trainRailDepItems = GOODS_CATEGORY_AXIS_ORDER.map((k) => ({
+          label: GOODS_CATEGORY_LABELS[k] ?? k,
+          value: trainDepByCat.get(k) ?? 0
+        }));
+        renderVerticalBarChart("trainRailDependencyChart", trainRailDepItems, {
+          yAxisLabel: "Train & Rail Dependency / Month"
         });
 
         // ── Participant table ──────────────────────────────────────────
