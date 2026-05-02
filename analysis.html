@@ -181,8 +181,15 @@
 
       .breakdownsGrid {
         display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+        grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
         gap: 16px;
+      }
+
+      /* Keep all five Breakdown cards (pies + Top Raw Materials + Top Products) on one row when wide enough */
+      @media (min-width: 1180px) {
+        .breakdownsGrid {
+          grid-template-columns: repeat(5, minmax(0, 1fr));
+        }
       }
 
       /* ── Pie chart (Breakdowns) ── */
@@ -427,6 +434,66 @@
         margin-bottom: 20px;
         display: none;
       }
+
+      /* ── Transportation mode dependency (bar charts) ── */
+      .dependencySection {
+        margin-top: 24px;
+      }
+
+      .dependencySection__title {
+        font-size: 12px;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--muted);
+        margin: 0 0 12px 0;
+      }
+
+      .dependencyChartGrid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+        gap: 16px;
+      }
+
+      .barChartHost {
+        min-height: 240px;
+        overflow-x: auto;
+      }
+
+      .barChartSvg {
+        display: block;
+        max-width: 100%;
+        height: auto;
+      }
+
+      .barChart__bar {
+        fill: var(--accent);
+        opacity: 0.92;
+      }
+
+      .barChart__axis,
+      .barChart__tick {
+        stroke: var(--border);
+        stroke-width: 1;
+      }
+
+      .barChart__label {
+        font-size: 9px;
+        font-weight: 600;
+        fill: var(--muted);
+      }
+
+      .barChart__value {
+        font-size: 9px;
+        font-weight: 700;
+        fill: var(--text);
+      }
+
+      .barChart__yTitle {
+        font-size: 10px;
+        font-weight: 700;
+        fill: var(--text);
+      }
     </style>
   </head>
   <body>
@@ -530,6 +597,21 @@
           </div>
 
         </div>
+
+        <div class="dependencySection">
+          <p class="dependencySection__title">Transportation mode dependency</p>
+          <div class="dependencyChartGrid">
+            <div class="panelCard">
+              <p class="panelCard__title">Huge truck dependency</p>
+              <p class="panelCard__hint">
+                Sum of (huge-truck leg distance × trips/month) per supply chain; participants with multiple goods categories count the full total toward each selected bar. Trips/month: week×(52÷12), day×(365÷12). Uncategorized participants attributed to Others.
+              </p>
+              <div id="hugeTruckDependencyChart" class="barChartHost">
+                <div class="emptyMsg">Loading<span class="loadingDots"></span></div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- Participant table -->
@@ -559,6 +641,8 @@
 
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6.5.0/turf.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.9.2/proj4.js"></script>
     <script>
       const TRANSPORT_LABELS = {
         train: "Train",
@@ -607,6 +691,219 @@
         light_fabrication: "Icons/Products/Light_fabrication.svg",
         high_tech: "Icons/Products/Tech.svg"
       };
+
+      /** Fixed X-axis order for transportation dependency charts (matches survey keys). */
+      const GOODS_CATEGORY_AXIS_ORDER = [
+        "recyclables",
+        "food",
+        "construction",
+        "automotive",
+        "light_fabrication",
+        "high_tech",
+        "other"
+      ];
+
+      let analysisProjReady = false;
+
+      function ensureAnalysisProjDefs() {
+        if (analysisProjReady || typeof proj4 !== "function") return;
+        proj4.defs(
+          "EPSG:2263",
+          "+proj=lcc +lat_1=41.03333333333333 +lat_2=40.66666666666666 +lat_0=40.16666666666666 +lon_0=-74 +x_0=300000.0000000001 +y_0=0 +ellps=GRS80 +datum=NAD83 +to_meter=0.3048006096012192 +no_defs"
+        );
+        analysisProjReady = true;
+      }
+
+      function epsg2263XYToLatLng(x, y) {
+        ensureAnalysisProjDefs();
+        const [lng, lat] = proj4("EPSG:2263", "EPSG:4326", [x, y]);
+        return { lat, lng };
+      }
+
+      /** Survey route points are EPSG:2263 pairs or legacy lat/lng objects (same as app.js). */
+      function surveyAnalysisPointsToLatLngs(points) {
+        if (!Array.isArray(points)) return [];
+        return points
+          .map((p) => {
+            if (Array.isArray(p) && p.length >= 2 && Number.isFinite(Number(p[0])) && Number.isFinite(Number(p[1]))) {
+              return epsg2263XYToLatLng(Number(p[0]), Number(p[1]));
+            }
+            if (p && typeof p.lat === "number" && typeof p.lng === "number") {
+              return { lat: p.lat, lng: p.lng };
+            }
+            return null;
+          })
+          .filter(Boolean);
+      }
+
+      function analysisHaversineMiles(a, b) {
+        const R = 3958.7613;
+        const toRad = (deg) => (deg * Math.PI) / 180;
+        const dLat = toRad(b.lat - a.lat);
+        const dLng = toRad(b.lng - a.lng);
+        const lat1 = toRad(a.lat);
+        const lat2 = toRad(b.lat);
+        const h =
+          Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+          Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) * Math.sin(dLng / 2);
+        return 2 * R * Math.asin(Math.sqrt(h));
+      }
+
+      function analysisLineLengthMiles(latlngs) {
+        if (!latlngs || latlngs.length < 2) return 0;
+        const line = {
+          type: "Feature",
+          properties: {},
+          geometry: {
+            type: "LineString",
+            coordinates: latlngs.map((p) => [p.lng, p.lat])
+          }
+        };
+        if (typeof turf !== "undefined" && typeof turf.length === "function") {
+          try {
+            return turf.length(line, { units: "miles" });
+          } catch {
+            /* fall through to haversine */
+          }
+        }
+        let sum = 0;
+        for (let i = 1; i < latlngs.length; i++) sum += analysisHaversineMiles(latlngs[i - 1], latlngs[i]);
+        return sum;
+      }
+
+      const TRIP_FREQ_PERIODS = new Set(["day", "week", "month"]);
+
+      function normalizeTripFrequencyPeriodAnalysis(k) {
+        const s = String(k ?? "")
+          .trim()
+          .toLowerCase();
+        return TRIP_FREQ_PERIODS.has(s) ? s : "";
+      }
+
+      function isTripFrequencyCompleteAnalysis(b) {
+        const per = normalizeTripFrequencyPeriodAnalysis(b?.tripFrequencyPeriod);
+        if (!per) return false;
+        const n = b?.tripFrequencyCount;
+        const num = typeof n === "number" ? n : Number(n);
+        return Number.isFinite(num) && num >= 1 && Math.floor(num) === num;
+      }
+
+      /** Integer trips per month (same conversion for all branches). */
+      function tripsPerMonthFromBranch(b) {
+        if (!isTripFrequencyCompleteAnalysis(b)) return 0;
+        const c = Math.floor(Number(b.tripFrequencyCount));
+        const per = normalizeTripFrequencyPeriodAnalysis(b.tripFrequencyPeriod);
+        if (per === "month") return c;
+        if (per === "week") return (c * 52) / 12;
+        if (per === "day") return (c * 365) / 12;
+        return 0;
+      }
+
+      function branchHugeTruckMilesOnly(b) {
+        if (!b || typeof b !== "object") return 0;
+        const diag = b.supplyChainDiagram ?? {};
+        const legs = diag.transportLegs ?? [];
+        const drawn = b.supplyChainTransportRoutes ?? [];
+        let miles = 0;
+        for (let i = 0; i < legs.length; i++) {
+          if (String(legs[i]?.modeKey ?? "").trim() !== "huge_truck") continue;
+          const pts = drawn[i]?.points;
+          if (!Array.isArray(pts) || pts.length < 2) continue;
+          const latlngs = surveyAnalysisPointsToLatLngs(pts);
+          if (latlngs.length < 2) continue;
+          miles += analysisLineLengthMiles(latlngs);
+        }
+        return miles;
+      }
+
+      function participantHugeTruckDependencyPerMonth(industry) {
+        if (!industry || typeof industry !== "object") return 0;
+        const branches = [...(industry.rawMaterialBranches ?? []), ...(industry.productBranches ?? [])];
+        let sum = 0;
+        for (const b of branches) {
+          if (!b) continue;
+          const tpm = tripsPerMonthFromBranch(b);
+          if (tpm <= 0) continue;
+          sum += branchHugeTruckMilesOnly(b) * tpm;
+        }
+        return sum;
+      }
+
+      /** Validated unique goods keys; empty → use ["other"] once. */
+      function participantGoodsCategoriesForDependency(ind) {
+        const raw = ind?.goodsCategoryKeys;
+        const seen = new Set();
+        const out = [];
+        if (Array.isArray(raw)) {
+          for (const k of raw) {
+            const key = String(k ?? "").trim();
+            if (!GOODS_CATEGORY_KEYS.has(key) || seen.has(key)) continue;
+            seen.add(key);
+            out.push(key);
+          }
+        }
+        if (!out.length) return ["other"];
+        return out;
+      }
+
+      function renderVerticalBarChart(hostId, items, opts) {
+        const host = document.getElementById(hostId);
+        if (!host) return;
+        const yAxisLabel = opts?.yAxisLabel ?? "";
+        const values = items.map((it) => Number(it.value) || 0);
+        const maxVal = Math.max(0, ...values, 1e-9);
+        const sum = values.reduce((a, v) => a + v, 0);
+        if (!items.length || sum <= 0) {
+          host.innerHTML = '<p class="emptyMsg" style="padding:16px 0">No data</p>';
+          return;
+        }
+
+        const W = 560;
+        const H = 260;
+        const padL = 52;
+        const padR = 16;
+        const padT = 14;
+        const padB = 72;
+        const chartW = W - padL - padR;
+        const chartH = H - padT - padB;
+        const n = items.length;
+        const gap = 8;
+        const barW = Math.max(4, (chartW - gap * (n - 1)) / n);
+
+        const fmt = (v) => (v >= 100 ? Math.round(v).toLocaleString() : v.toFixed(1));
+
+        let svg = `<svg class="barChartSvg" viewBox="0 0 ${W} ${H}" role="img" aria-label="Bar chart">`;
+        svg += `<text class="barChart__yTitle" x="12" y="${padT + chartH / 2}" transform="rotate(-90 12 ${padT + chartH / 2})" text-anchor="middle">${escHtml(yAxisLabel)}</text>`;
+        svg += `<line class="barChart__axis" x1="${padL}" y1="${padT + chartH}" x2="${padL + chartW}" y2="${padT + chartH}" />`;
+        svg += `<line class="barChart__axis" x1="${padL}" y1="${padT}" x2="${padL}" y2="${padT + chartH}" />`;
+
+        const ticks = 4;
+        for (let t = 0; t <= ticks; t++) {
+          const frac = t / ticks;
+          const y = padT + chartH * (1 - frac);
+          const val = maxVal * frac;
+          svg += `<line class="barChart__tick" x1="${padL - 4}" y1="${y}" x2="${padL}" y2="${y}" />`;
+          svg += `<text class="barChart__label" x="${padL - 6}" y="${y + 3}" text-anchor="end">${escHtml(fmt(val))}</text>`;
+        }
+
+        for (let i = 0; i < n; i++) {
+          const v = values[i];
+          const h = chartH * (v / maxVal);
+          const x = padL + i * (barW + gap);
+          const y = padT + chartH - h;
+          svg += `<rect class="barChart__bar" x="${x}" y="${y}" width="${barW}" height="${Math.max(h, 0)}" rx="2" />`;
+          if (v > 0) {
+            svg += `<text class="barChart__value" x="${x + barW / 2}" y="${y - 4}" text-anchor="middle">${escHtml(fmt(v))}</text>`;
+          }
+          const label = items[i].label ?? "";
+          const lx = x + barW / 2;
+          const ly = padT + chartH + 12;
+          svg += `<text class="barChart__label" x="${lx}" y="${ly}" text-anchor="end" transform="rotate(-42 ${lx} ${ly})">${escHtml(label)}</text>`;
+        }
+
+        svg += "</svg>";
+        host.innerHTML = svg;
+      }
 
       function roleLabel(key) {
         return ROLE_LABELS[key] || (key ? key : "Unknown");
@@ -758,8 +1055,12 @@
           errorBanner.style.display = "block";
           errorBanner.textContent = `Could not load participants: ${err.message}`;
           subtitle.textContent = "Error loading data";
+          const hdc = document.getElementById("hugeTruckDependencyChart");
+          if (hdc) hdc.innerHTML = '<p class="emptyMsg" style="padding:16px 0">No data</p>';
           return;
         }
+
+        ensureAnalysisProjDefs();
 
         if (!list.length) {
           subtitle.textContent = "No participants yet";
@@ -775,6 +1076,8 @@
           });
           ["participantsRolesBreakdownList","locationsBreakdownList","routesBreakdownList","companiesBreakdownList","rawMaterialsOverviewBreakdownList","productsOverviewBreakdownList"]
             .forEach(id => { document.getElementById(id).innerHTML = '<p class="emptyMsg" style="padding:16px 0">No data</p>'; });
+          const hdc = document.getElementById("hugeTruckDependencyChart");
+          if (hdc) hdc.innerHTML = '<p class="emptyMsg" style="padding:16px 0">No data</p>';
           return;
         }
 
@@ -817,6 +1120,10 @@
         let segTrain = 0;
         let segOther = 0;
         let supplyChainCount = 0;
+
+        /** Per goods category: Σ participant huge-truck dependency (full amount to each selected category). */
+        const hugeDepByCat = new Map();
+        for (const key of GOODS_CATEGORY_AXIS_ORDER) hugeDepByCat.set(key, 0);
 
         for (const d of valid) {
           const ind = d.state?.industry ?? {};
@@ -900,6 +1207,12 @@
           for (const p of (ind.products ?? [])) {
             if (p?.name) allProducts.push(String(p.name).trim());
             else if (typeof p === "string" && p) allProducts.push(p.trim());
+          }
+
+          const hugeTotal = participantHugeTruckDependencyPerMonth(ind);
+          const hugeCats = participantGoodsCategoriesForDependency(ind);
+          for (const cat of hugeCats) {
+            hugeDepByCat.set(cat, (hugeDepByCat.get(cat) ?? 0) + hugeTotal);
           }
         }
 
@@ -998,6 +1311,14 @@
 
         renderTopFiveList("rawMaterialBreakdown", rawMaterialCounts, allRawMaterials.length);
         renderTopFiveList("productBreakdown", productCounts, allProducts.length);
+
+        const hugeTruckDepItems = GOODS_CATEGORY_AXIS_ORDER.map((k) => ({
+          label: GOODS_CATEGORY_LABELS[k] ?? k,
+          value: hugeDepByCat.get(k) ?? 0
+        }));
+        renderVerticalBarChart("hugeTruckDependencyChart", hugeTruckDepItems, {
+          yAxisLabel: "Huge Truck Dependency / Month"
+        });
 
         // ── Participant table ──────────────────────────────────────────
 
