@@ -1769,10 +1769,20 @@ function addSupplyChainBranchRoutePolylinesToLayer(branches, itemLabels, kind) {
       const color = getSupplyChainTransportRouteColor(modeKey, kind);
       const line = L.polyline(latlngs, createModePolylineStyle(color, false));
       line._conductorTransportMode = conductorTransportFilterKey(modeKey);
+      line._conductorBranchKind = kind;
+      line._conductorBranchIndex = bi;
+      line._conductorParticipantId = b._participantId ?? viewingParticipantId ?? null;
+      line._conductorLocalBranchIndex = b._localBranchIndex ?? bi;
       const modeLab = formatSupplyChainTransportModeLabel(d.transportLegs[li]);
       line.bindPopup(
         `${escapeHtml(itemLabel)} · Transportation ${li + 1} (${escapeHtml(modeLab)}) · ${routeSuffix}`
       );
+      if (SURVEY_MODE === "conductor") {
+        line.on("click", (e) => {
+          L.DomEvent.stopPropagation(e);
+          void onConductorRouteClick(line);
+        });
+      }
       layers.supplyChainRoutes.addLayer(line);
     }
   }
@@ -5377,18 +5387,52 @@ function initParticipantLeftPanelOnce() {
   });
 }
 
-/* ── Conductor collapsible card system ───────────────────────── */
+/* ── Conductor stacked card system ───────────────────────────── */
 
-let conductorOpenCard = null;
+const COND_CARD_IDS = ["participant", "raw", "product", "summary"];
+const COND_CARD_PEEK = 72;
+
+let conductorOpenCard = "participant";
+
+function layoutCondCards() {
+  const container = document.querySelector(".conductorCards");
+  if (!container || SURVEY_MODE !== "conductor") return;
+  const totalH = container.clientHeight;
+  if (totalH <= 0) return;
+  const activeId = conductorOpenCard ?? "participant";
+  const activeIdx = COND_CARD_IDS.indexOf(activeId);
+  const N = COND_CARD_IDS.length;
+
+  COND_CARD_IDS.forEach((id, i) => {
+    const card = document.getElementById(`condCard_${id}`);
+    if (!card) return;
+    let top, height;
+    if (i < activeIdx) {
+      top = i * COND_CARD_PEEK;
+      height = COND_CARD_PEEK;
+    } else if (i === activeIdx) {
+      top = activeIdx * COND_CARD_PEEK;
+      height = Math.max(COND_CARD_PEEK, totalH - (N - 1) * COND_CARD_PEEK);
+    } else {
+      top = totalH - (N - i) * COND_CARD_PEEK;
+      height = COND_CARD_PEEK;
+    }
+    card.style.top = `${top}px`;
+    card.style.height = `${height}px`;
+    card.classList.toggle("condCard--open", id === activeId);
+  });
+}
+
+function initCondCardResize() {
+  if (SURVEY_MODE !== "conductor") return;
+  const container = document.querySelector(".conductorCards");
+  if (!container) return;
+  new ResizeObserver(() => layoutCondCards()).observe(container);
+}
 
 function openCondCard(cardId) {
-  const ids = ["participant", "raw", "product", "summary"];
-  for (const id of ids) {
-    const card = document.getElementById(`condCard_${id}`);
-    if (!card) continue;
-    card.classList.toggle("condCard--open", id === cardId);
-  }
   conductorOpenCard = cardId;
+  layoutCondCards();
 }
 
 function initCondCards() {
@@ -5397,25 +5441,55 @@ function initCondCards() {
   if (!cardsEl) return;
 
   cardsEl.addEventListener("click", (e) => {
-    // Pills in the preview handle their own click (openCondCard + sync), don't double-fire
-    if (e.target.closest("[data-conductor-rm-index], [data-conductor-product-index]")) return;
-    // Ignore clicks inside an expanded body
     if (e.target.closest(".condCard__body")) return;
-
     const card = e.target.closest(".condCard");
     if (!card) return;
     const cardId = card.id.replace("condCard_", "");
-    const isOpen = card.classList.contains("condCard--open");
+    openCondCard(cardId);
+    if (cardId === "raw" || cardId === "product") syncConductorParticipantLeftPanel();
+    if (cardId === "summary") updateCondCardSummaryStats();
+  });
+}
 
-    if (isOpen) {
-      card.classList.remove("condCard--open");
-      conductorOpenCard = null;
-    } else {
-      openCondCard(cardId);
-      if (cardId === "raw" || cardId === "product") syncConductorParticipantLeftPanel();
-      if (cardId === "summary") updateCondCardSummaryStats();
+function initSharePopup() {
+  if (SURVEY_MODE !== "conductor") return;
+  const trigger = document.getElementById("conductorShareTriggerBtn");
+  const popup = document.getElementById("conductorSharePopup");
+  if (!trigger || !popup) return;
+  trigger.addEventListener("click", (e) => {
+    e.stopPropagation();
+    popup.classList.toggle("is-hidden");
+  });
+  document.addEventListener("click", (e) => {
+    if (!popup.contains(e.target) && !trigger.contains(e.target)) {
+      popup.classList.add("is-hidden");
     }
   });
+}
+
+function updateConductorRouteHighlight() {
+  if (!layers?.supplyChainRoutes) return;
+  const kind = ui.participantLeftPanelKind;
+  const idx = ui.participantLeftPanelIndex;
+  const BASE_WEIGHT = 5;
+  layers.supplyChainRoutes.eachLayer((line) => {
+    const lineIdx = line._conductorLocalBranchIndex ?? line._conductorBranchIndex;
+    const isSelected = idx != null && line._conductorBranchKind === kind && lineIdx === idx;
+    line.setStyle({ weight: isSelected ? BASE_WEIGHT * 2 : BASE_WEIGHT });
+  });
+}
+
+async function onConductorRouteClick(line) {
+  const pid = line._conductorParticipantId;
+  const localIdx = line._conductorLocalBranchIndex ?? line._conductorBranchIndex;
+  const bkind = line._conductorBranchKind;
+  if (!pid || bkind == null) return;
+  await selectConductorParticipant(pid);
+  ui.participantLeftPanelKind = bkind;
+  ui.participantLeftPanelIndex = localIdx;
+  openCondCard(bkind === BRANCH_KIND_PRODUCT ? "product" : "raw");
+  syncConductorParticipantLeftPanel();
+  updateConductorRouteHighlight();
 }
 
 function updateCondCardParticipantSummary() {
@@ -5423,20 +5497,14 @@ function updateCondCardParticipantSummary() {
   const role = formatParticipantRoleSummary(state.industry);
   const goods = formatParticipantGoodsSummary(state.industry);
 
-  const setChip = (id, text) => {
+  const setVal = (id, text) => {
     const el = document.getElementById(id);
     if (!el) return;
-    if (text) {
-      el.textContent = text;
-      el.style.display = "";
-    } else {
-      el.textContent = "";
-      el.style.display = "none";
-    }
+    el.textContent = text || "—";
   };
-  setChip("condCardSummaryCompany", company);
-  setChip("condCardSummaryRole", role);
-  setChip("condCardSummaryProducts", goods);
+  setVal("condCardSummaryCompany", company);
+  setVal("condCardSummaryRole", role);
+  setVal("condCardSummaryProducts", goods);
 
   const dateEl = document.getElementById("condCardDate");
   if (dateEl) {
@@ -5566,6 +5634,7 @@ function initConductorLeftPanelOnce() {
     ui.participantLeftPanelIndex = i;
     openCondCard("raw");
     syncConductorParticipantLeftPanel();
+    updateConductorRouteHighlight();
   });
   productPills?.addEventListener("click", (e) => {
     const btn = e.target.closest("[data-conductor-product-index]");
@@ -5577,6 +5646,7 @@ function initConductorLeftPanelOnce() {
     ui.participantLeftPanelIndex = i;
     openCondCard("product");
     syncConductorParticipantLeftPanel();
+    updateConductorRouteHighlight();
   });
 }
 
@@ -6052,9 +6122,13 @@ function buildMergedConductorPayload(rows) {
     merged.routes.ibx.segments.push(...(cloneJson(payload.routes?.ibx?.segments) ?? []));
     const ind = payload.industry ?? {};
     merged.industry.rawMaterials.push(...(cloneJson(ind.rawMaterials) ?? []));
-    merged.industry.rawMaterialBranches.push(...(cloneJson(ind.rawMaterialBranches) ?? []));
+    const rmBranches = cloneJson(ind.rawMaterialBranches) ?? [];
+    rmBranches.forEach((b, i) => { if (b) { b._participantId = row.id; b._localBranchIndex = i; } });
+    merged.industry.rawMaterialBranches.push(...rmBranches);
     merged.industry.products.push(...(cloneJson(ind.products) ?? []));
-    merged.industry.productBranches.push(...(cloneJson(ind.productBranches) ?? []));
+    const prodBranches = cloneJson(ind.productBranches) ?? [];
+    prodBranches.forEach((b, i) => { if (b) { b._participantId = row.id; b._localBranchIndex = i; } });
+    merged.industry.productBranches.push(...prodBranches);
   }
   merged.routes.current.totalCostGold = merged.routes.current.segments.reduce(
     (acc, seg) => acc + Number(seg?.costGold ?? 0),
@@ -6115,15 +6189,14 @@ function populateParticipantDeleteList(ul, list, currentId, selectedIds) {
     selectBtn.addEventListener("click", async () => {
       if (selectedIds.has(p.id)) selectedIds.delete(p.id);
       else selectedIds.add(p.id);
-      if (viewingParticipantId) await exitConductorViewMode();
-      await applyConductorSelectionToMap();
+      if (!viewingParticipantId) await applyConductorSelectionToMap();
       renderFilteredParticipantList();
     });
 
     const viewBtn = document.createElement("button");
     viewBtn.type = "button";
     viewBtn.className = "ghostBtn participantRow__delete";
-    viewBtn.textContent = "View";
+    viewBtn.textContent = "View Details";
     viewBtn.addEventListener("click", () => void selectConductorParticipant(p.id));
 
     const delBtn = document.createElement("button");
@@ -6367,7 +6440,8 @@ async function selectConductorParticipant(id) {
   applySurveyPayload(data.state, { persist: false });
   rebuildFromState();
   uiUpdateStats();
-  document.getElementById("conductorViewingLabel").textContent = data.label;
+  const viewLbl = document.getElementById("conductorViewingLabel");
+  if (viewLbl) viewLbl.textContent = data.label;
   renderFilteredParticipantList();
   setStep("locations");
 }
@@ -6378,9 +6452,7 @@ function setupConductorCreateLink() {
     const label = String(labelIn?.value ?? "").trim() || "Participant";
     const res = await fetch("/api/participants", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ label })
     });
     if (!res.ok) {
@@ -6389,12 +6461,23 @@ function setupConductorCreateLink() {
     }
     const data = await res.json();
     const out = document.getElementById("shareUrlOutput");
-    if (out) {
-      out.value = data.shareUrl;
-      out.classList.remove("is-hidden");
-    }
+    const row = document.getElementById("conductorShareUrlRow");
+    if (out) out.value = data.shareUrl;
+    if (row) row.classList.remove("is-hidden");
     labelIn.value = "";
     await refreshParticipantList();
+  });
+
+  document.getElementById("conductorCopyBtn")?.addEventListener("click", () => {
+    const out = document.getElementById("shareUrlOutput");
+    if (!out?.value) return;
+    navigator.clipboard.writeText(out.value).then(() => {
+      const btn = document.getElementById("conductorCopyBtn");
+      if (btn) {
+        btn.classList.add("conductorCopyBtn--copied");
+        setTimeout(() => btn.classList.remove("conductorCopyBtn--copied"), 1500);
+      }
+    });
   });
 }
 
@@ -6414,7 +6497,10 @@ async function initConductorSurveyUi() {
       "Use the left panel to review the participant’s profile, raw materials, products, and supply-chain diagram (read-only). Open Advance to filter participants and map features.";
   }
   setupConductorCreateLink();
+  initSharePopup();
   initCondCards();
+  initCondCardResize();
+  requestAnimationFrame(() => layoutCondCards());
   initConductorLeftPanelOnce();
   syncConductorParticipantLeftPanel();
   resetConductorFeatureFilters();

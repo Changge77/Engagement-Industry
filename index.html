@@ -22,17 +22,12 @@
           <img src="Icons/Logo/Logo.svg" alt="Manifest" class="conductorSidebar__logo" />
           <div class="conductorSidebar__brandRight">
             <span class="conductorSidebar__modeLabel">Conductor</span>
-            <button class="primaryBtn conductorSidebar__shareBtn" id="createParticipantBtn" type="button">Share Survey</button>
+            <button class="primaryBtn conductorSidebar__shareBtn" id="conductorShareTriggerBtn" type="button">Share Survey</button>
           </div>
         </div>
 
-        <!-- Participant tools -->
-        <div class="conductorSidebar__tools">
-          <div class="conductorToolbar__row">
-            <h2 class="conductorToolbar__h2">Participants</h2>
-            <span class="conductorToolbar__hint" id="conductorViewingLabel"></span>
-          </div>
-          <div id="conductorIndustryLabel" class="conductorToolbar__industry is-hidden" aria-live="polite"></div>
+        <!-- Share popup (floating, shown on Share Survey click) -->
+        <div class="conductorSharePopup is-hidden" id="conductorSharePopup">
           <div class="conductorToolbar__create">
             <input
               id="newParticipantLabel"
@@ -41,64 +36,48 @@
               placeholder="Label (e.g. name or session ID)"
               maxlength="200"
             />
+            <button class="primaryBtn" id="createParticipantBtn" type="button">Create link</button>
           </div>
-          <textarea id="shareUrlOutput" class="shareUrlOutput is-hidden" readonly rows="3" aria-label="Sharing link"></textarea>
+          <div class="conductorShareUrlRow is-hidden" id="conductorShareUrlRow">
+            <textarea id="shareUrlOutput" class="shareUrlOutput" readonly rows="2" aria-label="Sharing link"></textarea>
+            <button class="conductorCopyBtn" id="conductorCopyBtn" type="button" title="Copy link to clipboard">
+              <img src="Icons/General/clipboard.svg" alt="Copy" class="conductorCopyBtn__icon" />
+            </button>
+          </div>
         </div>
 
         <!-- ── Stacked cards ──────────────────────────────────── -->
         <div class="conductorCards">
 
-          <!-- Card: Participant -->
+          <!-- Card: Participant (z=4) -->
           <div class="condCard condCard--participant" id="condCard_participant">
-            <div class="condCard__top">
-              <div class="condCard__titleRow">
-                <span class="condCard__title">Participant</span>
-                <span class="condCard__chevron" aria-hidden="true">▸</span>
-              </div>
-              <div class="condCard__preview">
-                <span id="condCardSummaryCompany" class="condCard__metaChip"></span>
-                <span id="condCardSummaryRole" class="condCard__metaChip"></span>
-                <span id="condCardSummaryProducts" class="condCard__metaChip"></span>
+            <div class="condCard__peek">
+              <span class="condCard__title">Participant</span>
+              <div class="condCard__infoTable">
+                <div class="condCard__infoCol">
+                  <span class="condCard__infoLabel">Company</span>
+                  <span id="condCardSummaryCompany" class="condCard__infoValue">—</span>
+                </div>
+                <div class="condCard__infoCol">
+                  <span class="condCard__infoLabel">Role</span>
+                  <span id="condCardSummaryRole" class="condCard__infoValue">—</span>
+                </div>
+                <div class="condCard__infoCol">
+                  <span class="condCard__infoLabel">Products</span>
+                  <span id="condCardSummaryProducts" class="condCard__infoValue">—</span>
+                </div>
               </div>
             </div>
             <div class="condCard__body" id="condCardBody_participant">
               <p id="condCardDate" class="condCard__date"></p>
-              <div id="conductorProfileCard" class="participantProfileCard participantProfileCard--conductorReadonly is-hidden" aria-label="Participant profile (read-only)">
-                <div class="participantProfileRow participantProfileRow--products">
-                  <div class="participantProfileProductsHeader">
-                    <span class="participantProfileRow__label participantProfileRow__label--inline">Company</span>
-                  </div>
-                  <ul id="conductorProfileCompanyList" class="participantProfileProductList is-hidden" aria-label="Company name"></ul>
-                  <p id="conductorProfileCompanyEmpty" class="participantProfileProductsEmpty">—</p>
-                </div>
-                <div class="participantProfileRow participantProfileRow--products">
-                  <div class="participantProfileProductsHeader">
-                    <span class="participantProfileRow__label participantProfileRow__label--inline">Job &amp; Role</span>
-                  </div>
-                  <ul id="conductorProfileRoleList" class="participantProfileProductList is-hidden" aria-label="Job and role"></ul>
-                  <p id="conductorProfileRoleEmpty" class="participantProfileProductsEmpty">—</p>
-                </div>
-                <div class="participantProfileRow participantProfileRow--products">
-                  <div class="participantProfileProductsHeader">
-                    <span class="participantProfileRow__label participantProfileRow__label--inline">Type of Products</span>
-                  </div>
-                  <ul id="conductorProfileProductsList" class="participantProfileProductList is-hidden" aria-label="Selected product types"></ul>
-                  <p id="conductorProfileProductsEmpty" class="participantProfileProductsEmpty">—</p>
-                </div>
-              </div>
             </div>
           </div>
 
-          <!-- Card: Raw Materials -->
+          <!-- Card: Raw Materials (z=5) -->
           <div class="condCard condCard--raw" id="condCard_raw">
-            <div class="condCard__top">
-              <div class="condCard__titleRow">
-                <span class="condCard__title">Raw Materials</span>
-                <span class="condCard__chevron" aria-hidden="true">▸</span>
-              </div>
-              <div class="condCard__preview">
-                <div id="conductorRawMaterialPills" class="condCard__pills participantPillRow" role="tablist" aria-label="Raw materials"></div>
-              </div>
+            <div class="condCard__peek">
+              <span class="condCard__title">Raw Materials</span>
+              <div id="conductorRawMaterialPills" class="condCard__pills participantPillRow" role="tablist" aria-label="Raw materials"></div>
             </div>
             <div class="condCard__body" id="condCardBody_raw">
               <div id="conductorLeftEmpty" class="condCard__emptyMsg" aria-live="polite"></div>
@@ -110,16 +89,11 @@
             </div>
           </div>
 
-          <!-- Card: Products -->
+          <!-- Card: Products (z=6) -->
           <div class="condCard condCard--product" id="condCard_product">
-            <div class="condCard__top">
-              <div class="condCard__titleRow">
-                <span class="condCard__title">Products</span>
-                <span class="condCard__chevron" aria-hidden="true">▸</span>
-              </div>
-              <div class="condCard__preview">
-                <div id="conductorProductPills" class="condCard__pills participantPillRow participantPillRow--products" role="tablist" aria-label="Products"></div>
-              </div>
+            <div class="condCard__peek">
+              <span class="condCard__title">Products</span>
+              <div id="conductorProductPills" class="condCard__pills participantPillRow participantPillRow--products" role="tablist" aria-label="Products"></div>
             </div>
             <div class="condCard__body" id="condCardBody_product">
               <p id="conductorProductDetailPlaceholder" class="condCard__emptyMsg is-hidden"></p>
@@ -127,16 +101,11 @@
             </div>
           </div>
 
-          <!-- Card: Summary -->
+          <!-- Card: Summary (z=7) -->
           <div class="condCard condCard--summary" id="condCard_summary">
-            <div class="condCard__top">
-              <div class="condCard__titleRow">
-                <span class="condCard__title">Summary</span>
-                <span class="condCard__chevron" aria-hidden="true">▸</span>
-              </div>
-              <div class="condCard__preview">
-                <span id="condCardSummaryPreview" class="condCard__previewText"></span>
-              </div>
+            <div class="condCard__peek">
+              <span class="condCard__title">Summary</span>
+              <span id="condCardSummaryPreview" class="condCard__previewText"></span>
             </div>
             <div class="condCard__body" id="condCardBody_summary">
               <div id="conductorSummaryStats" class="condCard__stats"></div>
@@ -186,44 +155,45 @@
               <div class="participantPicker">
                 <label class="participantPicker__label" for="participantSearch">Find participant</label>
                 <input id="participantSearch" class="participantPicker__input" type="search" placeholder="Type to search…" autocomplete="off" />
-                <p class="participantPicker__hint">Check to filter map. Use View to open one profile; Delete removes it permanently.</p>
+                <p class="participantPicker__hint">Check to show on map. Use View Details to open a profile in the sidebar; Delete removes it permanently.</p>
               </div>
               <ul id="participantList" class="participantList participantList--with-delete" aria-label="Filtered participants"></ul>
             </section>
             <section class="manifestFilterSection">
               <h3 class="manifestFilterSection__title">Filter by Feature</h3>
-              <div class="manifestFeatureGroup">
-                <div class="manifestFeatureGroup__header">
-                  <h4 class="manifestFeatureGroup__title">Points</h4>
-                  <div class="manifestFeatureGroup__actions">
-                    <button class="ghostBtn manifestFeatureGroup__actionBtn" type="button" data-feature-group="point" data-feature-action="show-all">Show All</button>
-                    <button class="ghostBtn manifestFeatureGroup__actionBtn" type="button" data-feature-group="point" data-feature-action="clear-all">Hide All</button>
+              <div class="manifestFeatureTwoCols">
+                <div class="manifestFeatureGroup">
+                  <div class="manifestFeatureGroup__header">
+                    <h4 class="manifestFeatureGroup__title">Locations</h4>
+                    <div class="manifestFeatureGroup__actions">
+                      <button class="ghostBtn manifestFeatureGroup__actionBtn" type="button" data-feature-group="point" data-feature-action="show-all">Show All</button>
+                      <button class="ghostBtn manifestFeatureGroup__actionBtn" type="button" data-feature-group="point" data-feature-action="clear-all">Hide All</button>
+                    </div>
                   </div>
+                  <label class="manifestCheck"><input type="checkbox" class="manifestFilterCheckbox" data-filter-group="point" data-filter-key="company" checked /> Company</label>
+                  <label class="manifestCheck"><input type="checkbox" class="manifestFilterCheckbox" data-filter-group="point" data-filter-key="starting" checked /> Starting Point</label>
+                  <label class="manifestCheck"><input type="checkbox" class="manifestFilterCheckbox" data-filter-group="point" data-filter-key="stopping" checked /> Stopping Point</label>
+                  <label class="manifestCheck"><input type="checkbox" class="manifestFilterCheckbox" data-filter-group="point" data-filter-key="destination" checked /> Destination</label>
                 </div>
-                <label class="manifestCheck"><input type="checkbox" class="manifestFilterCheckbox" data-filter-group="point" data-filter-key="company" checked /> Company</label>
-                <label class="manifestCheck"><input type="checkbox" class="manifestFilterCheckbox" data-filter-group="point" data-filter-key="starting" checked /> Starting Point</label>
-                <label class="manifestCheck"><input type="checkbox" class="manifestFilterCheckbox" data-filter-group="point" data-filter-key="stopping" checked /> Stopping Point</label>
-                <label class="manifestCheck"><input type="checkbox" class="manifestFilterCheckbox" data-filter-group="point" data-filter-key="destination" checked /> Destination</label>
-              </div>
-              <div class="manifestFeatureGroup">
-                <div class="manifestFeatureGroup__header">
-                  <h4 class="manifestFeatureGroup__title">Transportation</h4>
-                  <div class="manifestFeatureGroup__actions">
-                    <button class="ghostBtn manifestFeatureGroup__actionBtn" type="button" data-feature-group="transport" data-feature-action="show-all">Show All</button>
-                    <button class="ghostBtn manifestFeatureGroup__actionBtn" type="button" data-feature-group="transport" data-feature-action="clear-all">Hide All</button>
+                <div class="manifestFeatureGroup">
+                  <div class="manifestFeatureGroup__header">
+                    <h4 class="manifestFeatureGroup__title">Transportation</h4>
+                    <div class="manifestFeatureGroup__actions">
+                      <button class="ghostBtn manifestFeatureGroup__actionBtn" type="button" data-feature-group="transport" data-feature-action="show-all">Show All</button>
+                      <button class="ghostBtn manifestFeatureGroup__actionBtn" type="button" data-feature-group="transport" data-feature-action="clear-all">Hide All</button>
+                    </div>
                   </div>
+                  <label class="manifestCheck"><input type="checkbox" class="manifestFilterCheckbox" data-filter-group="transport" data-filter-key="train" checked /> <img src="Icons/Modes/Rail.svg" class="manifestCheck__icon" alt="" /> Train</label>
+                  <label class="manifestCheck"><input type="checkbox" class="manifestFilterCheckbox" data-filter-group="transport" data-filter-key="huge" checked /> <img src="Icons/Modes/Large-Truck.svg" class="manifestCheck__icon" alt="" /> Huge Truck</label>
+                  <label class="manifestCheck"><input type="checkbox" class="manifestFilterCheckbox" data-filter-group="transport" data-filter-key="small" checked /> <img src="Icons/Modes/Small_truck.svg" class="manifestCheck__icon" alt="" /> Small Truck</label>
+                  <label class="manifestCheck"><input type="checkbox" class="manifestFilterCheckbox" data-filter-group="transport" data-filter-key="others" checked /> Others</label>
                 </div>
-                <label class="manifestCheck"><input type="checkbox" class="manifestFilterCheckbox" data-filter-group="transport" data-filter-key="train" checked /> Train</label>
-                <label class="manifestCheck"><input type="checkbox" class="manifestFilterCheckbox" data-filter-group="transport" data-filter-key="huge" checked /> Huge Truck</label>
-                <label class="manifestCheck"><input type="checkbox" class="manifestFilterCheckbox" data-filter-group="transport" data-filter-key="small" checked /> Small Truck</label>
-                <label class="manifestCheck"><input type="checkbox" class="manifestFilterCheckbox" data-filter-group="transport" data-filter-key="others" checked /> Others</label>
               </div>
             </section>
             <section class="manifestFilterSection">
               <h3 class="manifestFilterSection__title">Analyze</h3>
               <div class="manifestAnalyzeActions">
-                <button class="ghostBtn" type="button">Cost for One Ride</button>
-                <button class="ghostBtn" type="button">Frequency (per mo)</button>
+                <button class="primaryBtn" type="button" onclick="window.open('analysis.html','_blank')">Start Analysis</button>
               </div>
             </section>
           </div>

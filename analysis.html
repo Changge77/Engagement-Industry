@@ -1,0 +1,600 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Analysis · NYC Supply Chain Survey</title>
+    <link rel="icon" href="data:," />
+    <style>
+      :root {
+        --bg: #fef5f8;
+        --panel: #ffffff;
+        --text: #3d2a32;
+        --muted: #7d5f6c;
+        --accent: #c94f7c;
+        --border: rgba(61, 42, 50, 0.14);
+        --shadow: rgba(61, 42, 50, 0.08);
+        --shadow-strong: rgba(61, 42, 50, 0.12);
+        --green-light: #E5FFF7;
+        --yellow-light: #FFF9EC;
+        --salmon: #E99894;
+      }
+
+      *, *::before, *::after { box-sizing: border-box; }
+
+      html, body {
+        height: 100%;
+        margin: 0;
+      }
+
+      body {
+        font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial;
+        background: var(--bg);
+        color: var(--text);
+        display: flex;
+        flex-direction: column;
+        min-height: 100vh;
+      }
+
+      /* ── Topbar ── */
+      .topbar {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 10px 20px;
+        background: rgba(255, 255, 255, 0.9);
+        backdrop-filter: blur(8px);
+        border-bottom: 1px solid var(--border);
+        box-shadow: 0 1px 0 var(--shadow);
+        position: sticky;
+        top: 0;
+        z-index: 10;
+      }
+
+      .topbar__logo {
+        height: 40px;
+      }
+
+      .topbar__divider {
+        width: 1px;
+        height: 28px;
+        background: var(--border);
+      }
+
+      .topbar__title {
+        font-size: 16px;
+        font-weight: 700;
+        color: var(--text);
+      }
+
+      .topbar__subtitle {
+        font-size: 12px;
+        color: var(--muted);
+        margin-left: auto;
+      }
+
+      /* ── Main layout ── */
+      .analysisMain {
+        flex: 1;
+        padding: 24px 28px;
+        max-width: 1280px;
+        width: 100%;
+        margin: 0 auto;
+      }
+
+      /* ── Section headings ── */
+      .sectionTitle {
+        font-size: 13px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--muted);
+        margin: 0 0 12px 0;
+      }
+
+      .sectionBlock {
+        margin-bottom: 32px;
+      }
+
+      /* ── Stat cards ── */
+      .statGrid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+        gap: 12px;
+      }
+
+      .statCard {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 0;
+        padding: 16px 18px;
+        box-shadow: 0 2px 8px var(--shadow);
+      }
+
+      .statCard__value {
+        font-size: 32px;
+        font-weight: 800;
+        color: var(--text);
+        line-height: 1;
+        margin-bottom: 4px;
+      }
+
+      .statCard__label {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--muted);
+      }
+
+      /* ── Two-column analysis grid ── */
+      .analysisGrid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+      }
+
+      @media (max-width: 740px) {
+        .analysisGrid { grid-template-columns: 1fr; }
+      }
+
+      /* ── Panel card ── */
+      .panelCard {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 0;
+        padding: 18px 20px;
+        box-shadow: 0 2px 8px var(--shadow);
+      }
+
+      .panelCard__title {
+        font-size: 13px;
+        font-weight: 700;
+        color: var(--text);
+        margin: 0 0 14px 0;
+      }
+
+      /* ── Bar chart rows ── */
+      .barList {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+
+      .barRow {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+
+      .barRow__header {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+      }
+
+      .barRow__label {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--text);
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .barRow__count {
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--muted);
+      }
+
+      .barTrack {
+        height: 8px;
+        background: rgba(61, 42, 50, 0.07);
+        border-radius: 2px;
+        overflow: hidden;
+      }
+
+      .barFill {
+        height: 100%;
+        border-radius: 2px;
+        background: var(--salmon);
+        transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+      }
+
+      .barFill--raw   { background: #74d9b8; }
+      .barFill--prod  { background: #f0c070; }
+      .barFill--role  { background: var(--salmon); }
+      .barFill--trans { background: #9ec8f7; }
+
+      /* ── Mode icon ── */
+      .modeIcon {
+        width: 16px;
+        height: 16px;
+        object-fit: contain;
+        vertical-align: middle;
+      }
+
+      /* ── Participant table ── */
+      .participantTable {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 12px;
+      }
+
+      .participantTable th {
+        text-align: left;
+        font-size: 11px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--muted);
+        padding: 6px 10px;
+        border-bottom: 1px solid var(--border);
+        background: rgba(61, 42, 50, 0.03);
+      }
+
+      .participantTable td {
+        padding: 8px 10px;
+        border-bottom: 1px solid var(--border);
+        color: var(--text);
+        font-weight: 500;
+        vertical-align: top;
+      }
+
+      .participantTable tr:last-child td { border-bottom: none; }
+
+      .participantTable tr:hover td { background: rgba(61, 42, 50, 0.03); }
+
+      .tableWrap {
+        overflow-x: auto;
+      }
+
+      /* ── Empty / loading ── */
+      .emptyMsg {
+        text-align: center;
+        padding: 40px 20px;
+        color: var(--muted);
+        font-size: 14px;
+        font-weight: 600;
+      }
+
+      .loadingDots::after {
+        content: "";
+        animation: dots 1.2s steps(3, end) infinite;
+      }
+
+      @keyframes dots {
+        0%   { content: ""; }
+        33%  { content: "."; }
+        66%  { content: ".."; }
+        100% { content: "..."; }
+      }
+
+      /* ── Tag pill ── */
+      .tag {
+        display: inline-block;
+        padding: 2px 7px;
+        font-size: 10px;
+        font-weight: 700;
+        border-radius: 3px;
+        background: rgba(61, 42, 50, 0.08);
+        color: var(--muted);
+        margin: 1px 2px 1px 0;
+      }
+
+      /* ── Error banner ── */
+      .errorBanner {
+        background: #fef2f2;
+        border: 1px solid #fecaca;
+        color: #991b1b;
+        padding: 12px 18px;
+        font-size: 13px;
+        font-weight: 600;
+        margin-bottom: 20px;
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <header class="topbar">
+      <img src="Icons/Logo/Logo.svg" alt="Manifest" class="topbar__logo" />
+      <div class="topbar__divider"></div>
+      <span class="topbar__title">Analysis</span>
+      <span class="topbar__subtitle" id="topbarSubtitle">Loading survey data<span class="loadingDots"></span></span>
+    </header>
+
+    <div class="analysisMain">
+
+      <div class="errorBanner" id="errorBanner"></div>
+
+      <!-- Summary stats -->
+      <div class="sectionBlock">
+        <p class="sectionTitle">Overview</p>
+        <div class="statGrid" id="statGrid">
+          <div class="statCard"><div class="statCard__value" id="statParticipants">—</div><div class="statCard__label">Participants</div></div>
+          <div class="statCard"><div class="statCard__value" id="statCompanies">—</div><div class="statCard__label">Companies</div></div>
+          <div class="statCard"><div class="statCard__value" id="statLocations">—</div><div class="statCard__label">Locations</div></div>
+          <div class="statCard"><div class="statCard__value" id="statSegments">—</div><div class="statCard__label">Route Segments</div></div>
+          <div class="statCard"><div class="statCard__value" id="statRawMaterials">—</div><div class="statCard__label">Raw Materials</div></div>
+          <div class="statCard"><div class="statCard__value" id="statProducts">—</div><div class="statCard__label">Products</div></div>
+        </div>
+      </div>
+
+      <!-- Breakdowns -->
+      <div class="sectionBlock">
+        <p class="sectionTitle">Breakdowns</p>
+        <div class="analysisGrid">
+
+          <div class="panelCard">
+            <p class="panelCard__title">Transport Modes</p>
+            <div class="barList" id="transportBreakdown"><div class="emptyMsg">Loading<span class="loadingDots"></span></div></div>
+          </div>
+
+          <div class="panelCard">
+            <p class="panelCard__title">Roles</p>
+            <div class="barList" id="roleBreakdown"><div class="emptyMsg">Loading<span class="loadingDots"></span></div></div>
+          </div>
+
+          <div class="panelCard">
+            <p class="panelCard__title">Top Raw Materials</p>
+            <div class="barList" id="rawMaterialBreakdown"><div class="emptyMsg">Loading<span class="loadingDots"></span></div></div>
+          </div>
+
+          <div class="panelCard">
+            <p class="panelCard__title">Top Products</p>
+            <div class="barList" id="productBreakdown"><div class="emptyMsg">Loading<span class="loadingDots"></span></div></div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- Participant table -->
+      <div class="sectionBlock">
+        <p class="sectionTitle">Participants</p>
+        <div class="panelCard">
+          <div class="tableWrap">
+            <table class="participantTable">
+              <thead>
+                <tr>
+                  <th>Label</th>
+                  <th>Company</th>
+                  <th>Role</th>
+                  <th>Raw Materials</th>
+                  <th>Products</th>
+                  <th>Locations</th>
+                  <th>Segments</th>
+                </tr>
+              </thead>
+              <tbody id="participantTableBody">
+                <tr><td colspan="7" class="emptyMsg">Loading<span class="loadingDots"></span></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <script>
+      const TRANSPORT_LABELS = {
+        train: "Train",
+        huge_truck: "Huge Truck",
+        small_truck: "Small Truck",
+        other: "Others"
+      };
+
+      const TRANSPORT_ICONS = {
+        train: "Icons/Modes/Rail.svg",
+        huge_truck: "Icons/Modes/Large-Truck.svg",
+        small_truck: "Icons/Modes/Small_truck.svg"
+      };
+
+      const ROLE_LABELS = {
+        manager: "Manager",
+        worker: "Worker",
+        transporter: "Transporter",
+        other: "Others"
+      };
+
+      function roleLabel(key) {
+        return ROLE_LABELS[key] || (key ? key : "Unknown");
+      }
+
+      function renderBarList(containerId, items, fillClass) {
+        const el = document.getElementById(containerId);
+        if (!el) return;
+        if (!items.length) {
+          el.innerHTML = '<p class="emptyMsg" style="padding:16px 0">No data</p>';
+          return;
+        }
+        const max = items[0].count;
+        el.innerHTML = items.map(({ label, count, icon }) => {
+          const pct = max > 0 ? Math.round((count / max) * 100) : 0;
+          const iconHtml = icon
+            ? `<img src="${icon}" class="modeIcon" alt="" />`
+            : "";
+          return `
+            <div class="barRow">
+              <div class="barRow__header">
+                <span class="barRow__label">${iconHtml}${escHtml(label)}</span>
+                <span class="barRow__count">${count}</span>
+              </div>
+              <div class="barTrack">
+                <div class="barFill ${fillClass}" style="width:${pct}%"></div>
+              </div>
+            </div>`;
+        }).join("");
+      }
+
+      function escHtml(s) {
+        return String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      }
+
+      function countBy(arr, keyFn) {
+        const map = new Map();
+        for (const item of arr) {
+          const k = keyFn(item);
+          map.set(k, (map.get(k) ?? 0) + 1);
+        }
+        return [...map.entries()]
+          .sort((a, b) => b[1] - a[1])
+          .map(([label, count]) => ({ label, count }));
+      }
+
+      async function loadAnalysis() {
+        const subtitle = document.getElementById("topbarSubtitle");
+        const errorBanner = document.getElementById("errorBanner");
+
+        let list;
+        try {
+          const res = await fetch("/api/conductor/participants");
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          list = await res.json();
+        } catch (err) {
+          errorBanner.style.display = "block";
+          errorBanner.textContent = `Could not load participants: ${err.message}`;
+          subtitle.textContent = "Error loading data";
+          return;
+        }
+
+        if (!list.length) {
+          subtitle.textContent = "No participants yet";
+          document.getElementById("participantTableBody").innerHTML =
+            '<tr><td colspan="7" class="emptyMsg">No participants found</td></tr>';
+          ["transportBreakdown","roleBreakdown","rawMaterialBreakdown","productBreakdown"]
+            .forEach(id => { document.getElementById(id).innerHTML = '<p class="emptyMsg" style="padding:16px 0">No data</p>'; });
+          return;
+        }
+
+        // Load all participant states
+        const rows = await Promise.all(list.map(async (p) => {
+          try {
+            const r = await fetch(`/api/conductor/participants/${encodeURIComponent(p.id)}`);
+            if (!r.ok) return null;
+            return await r.json();
+          } catch { return null; }
+        }));
+
+        const valid = rows.filter(Boolean);
+
+        // ── Aggregate stats ──────────────────────────────────────────
+
+        const companies = new Set();
+        let totalLocations = 0;
+        let totalSegments = 0;
+        const allRawMaterials = [];
+        const allProducts = [];
+        const transportCounts = new Map();
+        const roleCounts = new Map();
+
+        for (const d of valid) {
+          const ind = d.state?.industry ?? {};
+          const locs = d.state?.locations ?? [];
+          const segs = [
+            ...(d.state?.routes?.current?.segments ?? []),
+            ...(d.state?.routes?.ibx?.segments ?? [])
+          ];
+
+          if (ind.companyName) companies.add(ind.companyName.trim());
+          totalLocations += locs.length;
+          totalSegments += segs.length;
+
+          const role = ind.roleKey || "other";
+          roleCounts.set(role, (roleCounts.get(role) ?? 0) + 1);
+
+          // Transport modes from branch legs
+          const branches = [
+            ...(ind.rawMaterialBranches ?? []),
+            ...(ind.productBranches ?? [])
+          ];
+          for (const b of branches) {
+            if (!b) continue;
+            for (const leg of (b.transportLegs ?? [])) {
+              const m = leg?.modeKey;
+              if (m) transportCounts.set(m, (transportCounts.get(m) ?? 0) + 1);
+            }
+          }
+
+          for (const rm of (ind.rawMaterials ?? [])) {
+            if (rm) allRawMaterials.push(String(rm).trim());
+          }
+          for (const p of (ind.products ?? [])) {
+            if (p?.name) allProducts.push(String(p.name).trim());
+            else if (typeof p === "string" && p) allProducts.push(p.trim());
+          }
+        }
+
+        // ── Update stats ──────────────────────────────────────────────
+
+        document.getElementById("statParticipants").textContent = valid.length;
+        document.getElementById("statCompanies").textContent = companies.size;
+        document.getElementById("statLocations").textContent = totalLocations;
+        document.getElementById("statSegments").textContent = totalSegments;
+        document.getElementById("statRawMaterials").textContent = allRawMaterials.length;
+        document.getElementById("statProducts").textContent = allProducts.length;
+
+        subtitle.textContent = `${valid.length} participant${valid.length !== 1 ? "s" : ""} · updated ${new Date().toLocaleTimeString()}`;
+
+        // ── Transport modes ───────────────────────────────────────────
+
+        const transportItems = [...transportCounts.entries()]
+          .sort((a, b) => b[1] - a[1])
+          .map(([key, count]) => ({
+            label: TRANSPORT_LABELS[key] ?? key,
+            count,
+            icon: TRANSPORT_ICONS[key] ?? null
+          }));
+
+        renderBarList("transportBreakdown", transportItems, "barFill--trans");
+
+        // ── Roles ─────────────────────────────────────────────────────
+
+        const roleItems = [...roleCounts.entries()]
+          .sort((a, b) => b[1] - a[1])
+          .map(([key, count]) => ({ label: roleLabel(key), count }));
+
+        renderBarList("roleBreakdown", roleItems, "barFill--role");
+
+        // ── Raw materials ─────────────────────────────────────────────
+
+        const rawItems = countBy(allRawMaterials, x => x).slice(0, 12);
+        renderBarList("rawMaterialBreakdown", rawItems, "barFill--raw");
+
+        // ── Products ──────────────────────────────────────────────────
+
+        const prodItems = countBy(allProducts, x => x).slice(0, 12);
+        renderBarList("productBreakdown", prodItems, "barFill--prod");
+
+        // ── Participant table ──────────────────────────────────────────
+
+        const tbody = document.getElementById("participantTableBody");
+        tbody.innerHTML = valid.map(d => {
+          const ind = d.state?.industry ?? {};
+          const locs = (d.state?.locations ?? []).length;
+          const segs = (d.state?.routes?.current?.segments ?? []).length
+                     + (d.state?.routes?.ibx?.segments ?? []).length;
+          const rawMats = (ind.rawMaterials ?? []).filter(Boolean);
+          const prods = (ind.products ?? []).filter(Boolean);
+          const role = roleLabel(ind.roleKey);
+          const rawTags = rawMats.slice(0, 5).map(r => `<span class="tag">${escHtml(r)}</span>`).join("") +
+            (rawMats.length > 5 ? `<span class="tag">+${rawMats.length - 5}</span>` : "");
+          const prodItems2 = prods.slice(0, 5).map(p => {
+            const name = typeof p === "string" ? p : p?.name ?? "";
+            return `<span class="tag">${escHtml(name)}</span>`;
+          }).join("") + (prods.length > 5 ? `<span class="tag">+${prods.length - 5}</span>` : "");
+
+          return `<tr>
+            <td>${escHtml(d.label || d.id)}</td>
+            <td>${escHtml(ind.companyName || "—")}</td>
+            <td>${escHtml(role)}</td>
+            <td>${rawTags || "—"}</td>
+            <td>${prodItems2 || "—"}</td>
+            <td>${locs}</td>
+            <td>${segs}</td>
+          </tr>`;
+        }).join("");
+      }
+
+      loadAnalysis();
+    </script>
+  </body>
+</html>
