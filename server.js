@@ -16,6 +16,8 @@ const PUBLIC_BASE_URL = (process.env.PUBLIC_BASE_URL || "").replace(/\/$/, "");
 
 const DATA_DIR = path.join(__dirname, "data");
 const DB_PATH = path.join(DATA_DIR, "survey.db");
+// survey.db is version-controlled: git pull before running on another machine so you load the same participants.
+// Participant Bearer tokens are stored in this file—treat repo access accordingly. Concurrent edits on two machines can yield Git merge conflicts on the binary DB.
 
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 
