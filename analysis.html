@@ -1020,7 +1020,7 @@
             <div class="dependencyChartGrid">
               <div class="panelCard">
                 <p class="panelCard__title">Segment frequency &amp; distance</p>
-                <p class="panelCard__hint">Distance • Frequency • Mode</p>
+                <p class="panelCard__hint">Distance • Frequency • Segments • Mode</p>
                 <div class="ibxScatterControls">
                   <label for="ibxScatterTpmInput">IBX trips / month</label>
                   <input id="ibxScatterTpmInput" type="number" min="0" step="any" placeholder="Optional" />
@@ -1028,6 +1028,14 @@
                 </div>
                 <p id="ibxScatterTpmStatus" class="muted" hidden></p>
                 <div id="transportSegmentFrequencyDistanceChart" class="barChartHost" data-analysis-chart>
+                  <div class="emptyMsg">Loading<span class="loadingDots"></span></div>
+                </div>
+              </div>
+
+              <div class="panelCard">
+                <p class="panelCard__title">Route frequency &amp; distance</p>
+                <p class="panelCard__hint">Distance • Frequency • Route • Industry Type</p>
+                <div id="transportRouteIndustryFrequencyChart" class="barChartHost" data-analysis-chart>
                   <div class="emptyMsg">Loading<span class="loadingDots"></span></div>
                 </div>
               </div>
@@ -1281,6 +1289,7 @@
       const SCATTER_IBX_LINE_COLOR = "#ffd166";
 
       let scatterChartCachePoints = [];
+      let scatterRouteIndustryChartCachePoints = [];
       let scatterChartCacheIbxMiles = null;
 
       function setIbxScatterStatus(message, warn) {
@@ -1372,10 +1381,13 @@
           typeof scatterChartCacheIbxMiles === "number" && scatterChartCacheIbxMiles > 0
             ? scatterChartCacheIbxMiles
             : 0;
-        renderFrequencyDistanceScatterChart("transportSegmentFrequencyDistanceChart", scatterChartCachePoints, {
-          ibxTpm: ibxStored,
-          ibxCorridorMiles: miles
-        });
+        const ibxOpts = { ibxTpm: ibxStored, ibxCorridorMiles: miles };
+        renderFrequencyDistanceScatterChart("transportSegmentFrequencyDistanceChart", scatterChartCachePoints, ibxOpts);
+        renderRouteIndustryFrequencyScatterChart(
+          "transportRouteIndustryFrequencyChart",
+          scatterRouteIndustryChartCachePoints,
+          ibxOpts
+        );
       }
 
       function setupScatterIbxControls() {
@@ -1431,6 +1443,30 @@
         return TRANSPORT_SEGMENT_SCATTER_COLORS[k] || TRANSPORT_SEGMENT_SCATTER_COLORS.other;
       }
 
+      /** Route-level scatter: goods category + Mixed (not used on segment chart). */
+      const ROUTE_INDUSTRY_SCATTER_COLORS = {
+        recyclables: "#16a34a",
+        food: "#ca8a04",
+        construction: "#57534e",
+        automotive: "#2563eb",
+        light_fabrication: "#c026d3",
+        high_tech: "#7c3aed",
+        other: "#475569",
+        mixed: "#9333ea"
+      };
+
+      const ROUTE_INDUSTRY_SCATTER_LEGEND_KEYS = [...GOODS_CATEGORY_AXIS_ORDER, "mixed"];
+
+      function routeIndustryScatterFill(industryKey) {
+        const k = String(industryKey ?? "").trim();
+        return ROUTE_INDUSTRY_SCATTER_COLORS[k] || ROUTE_INDUSTRY_SCATTER_COLORS.other;
+      }
+
+      function routeIndustryScatterLegendLabel(key) {
+        if (key === "mixed") return "Mixed";
+        return GOODS_CATEGORY_LABELS[key] ?? key;
+      }
+
       /** Miles drawn for supply-chain leg `legIndex`; 0 if missing or degenerate geometry. */
       function branchLegDistanceMiles(b, legIndex) {
         if (!b || typeof b !== "object") return 0;
@@ -1444,6 +1480,18 @@
         const latlngs = surveyAnalysisPointsToLatLngs(pts);
         if (latlngs.length < 2) return 0;
         return analysisLineLengthMiles(latlngs);
+      }
+
+      /** Sum of drawn leg mileages for branch `b` (whole supply route on the map). */
+      function branchTotalTransportMiles(b) {
+        if (!b || typeof b !== "object") return 0;
+        const diag = b.supplyChainDiagram ?? {};
+        const legs = diag.transportLegs ?? [];
+        let sum = 0;
+        for (let i = 0; i < legs.length; i++) {
+          sum += branchLegDistanceMiles(b, i);
+        }
+        return sum;
       }
 
       /**
@@ -1867,6 +1915,218 @@
         });
       }
 
+      function routeIndustryScatterPointIndustryDisplay(p) {
+        const ik = String(p.industryKey ?? "").trim();
+        const mix = String(p.industryMixDetail ?? "").trim();
+        if (ik === "mixed" && mix) return mix;
+        return routeIndustryScatterLegendLabel(ik || "other");
+      }
+
+      /** `points`: `{ x, y, industryKey, industryMixDetail?, routeId }` per whole supply route. `opts`: ibxTpm, ibxCorridorMiles. */
+      function renderRouteIndustryFrequencyScatterChart(hostId, points, opts) {
+        const o = opts && typeof opts === "object" ? opts : {};
+        const ibxTpm = Number(o.ibxTpm) > 0 ? Number(o.ibxTpm) : 0;
+        const ibxCorridorMiles = Number(o.ibxCorridorMiles) > 0 ? Number(o.ibxCorridorMiles) : 0;
+        const hasIbxOverlay = ibxTpm > 0 && ibxCorridorMiles > 0;
+        const hasDots = Array.isArray(points) && points.length > 0;
+
+        const host = document.getElementById(hostId);
+        if (!host) return;
+        if (!hasDots && !hasIbxOverlay) {
+          host.innerHTML = '<p class="emptyMsg" style="padding:16px 0">No data</p>';
+          return;
+        }
+
+        const routeCountByRoute = new Map();
+        if (hasDots) {
+          for (const p of points) {
+            const rid = String(p.routeId ?? "").trim();
+            if (!rid) continue;
+            routeCountByRoute.set(rid, (routeCountByRoute.get(rid) ?? 0) + 1);
+          }
+        }
+
+        const xs = hasDots ? points.map((p) => Number(p.x) || 0) : [];
+        const ys = hasDots ? points.map((p) => Number(p.y) || 0) : [];
+        if (hasIbxOverlay) {
+          ys.push(ibxCorridorMiles);
+          xs.push(ibxTpm);
+        }
+
+        let rawMaxX = hasDots ? Math.max(...xs) : ibxTpm;
+        if (hasDots && ibxTpm > 0) rawMaxX = Math.max(rawMaxX, ibxTpm);
+        if (!Number.isFinite(rawMaxX) || rawMaxX <= 0) rawMaxX = 1;
+        let xMax = rawMaxX * 1.05;
+        if (!Number.isFinite(xMax) || xMax <= 0) xMax = 100;
+
+        const yValuesForBounds = hasDots ? ys.slice() : hasIbxOverlay ? [0, ibxCorridorMiles] : [0];
+        const { yMin, step: yStep, tickValues: yTicks, span: spanY } = analysisDependencyYBounds(
+          yValuesForBounds,
+          ANALYSIS_SCATTER_Y_STEP
+        );
+        const invSpanY = spanY > 0 ? 1 / spanY : 1;
+        const invSpanX = xMax > 0 ? 1 / xMax : 1;
+
+        const W = 980;
+        const H = 418;
+        const padL = 88;
+        const padR = 36;
+        const padT = 22;
+        const padB = 62;
+        const chartW = W - padL - padR;
+        const chartH = H - padT - padB;
+
+        const yToPx = (v) => {
+          const rawFrac = ((Math.max(0, Number(v) || 0) - yMin) * invSpanY);
+          const frac = Math.min(Math.max(rawFrac, 0), 1);
+          return padT + chartH * (1 - frac);
+        };
+        const xToPx = (v) => padL + Math.min(Math.max(((Number(v) || 0) - 0) * invSpanX, 0), 1) * chartW;
+
+        let svg = `<svg class="scatterChartSvg" viewBox="0 0 ${W} ${H}" width="100%" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Whole supply route trips per month versus total route distance by industry category">`;
+
+        svg += `<text class="barChart__yTitle" x="18" y="${padT + chartH / 2}" transform="rotate(-90 18 ${padT + chartH / 2})" text-anchor="middle">Distance (miles)</text>`;
+
+        for (const tv of yTicks) {
+          if (tv <= yMin) continue;
+          const gy = padT + chartH * (1 - (tv - yMin) * invSpanY);
+          svg += `<line class="barChart__grid" x1="${padL}" y1="${gy}" x2="${padL + chartW}" y2="${gy}" />`;
+        }
+
+        svg += `<line class="barChart__axis" x1="${padL}" y1="${padT + chartH}" x2="${padL + chartW}" y2="${padT + chartH}" />`;
+        svg += `<line class="barChart__axis" x1="${padL}" y1="${padT}" x2="${padL}" y2="${padT + chartH}" />`;
+
+        for (const tv of yTicks) {
+          const gy = padT + chartH * (1 - (tv - yMin) * invSpanY);
+          svg += `<line class="barChart__tick" x1="${padL - 6}" y1="${gy}" x2="${padL}" y2="${gy}" />`;
+          svg += `<text class="barChart__label" x="${padL - 10}" y="${gy + 4}" text-anchor="end">${escHtml(
+            analysisFormatAxisNumber(tv, yStep)
+          )}</text>`;
+        }
+
+        const xTickN = 6;
+        for (let i = 0; i <= xTickN; i++) {
+          const xv = (xMax * i) / xTickN;
+          const px = padL + (chartW * i) / xTickN;
+          svg += `<line class="barChart__tick" x1="${px}" y1="${padT + chartH}" x2="${px}" y2="${padT + chartH + 6}" />`;
+          svg += `<text class="barChart__label" x="${px}" y="${padT + chartH + 22}" text-anchor="middle">${escHtml(
+            analysisFormatScatterXTick(xv, xMax)
+          )}</text>`;
+        }
+
+        svg += `<text class="barChart__label" x="${padL + chartW / 2}" y="${H - 8}" text-anchor="middle" font-weight="700">Trips / month</text>`;
+
+        svg += `<rect class="scatterChartBackdrop" x="${padL}" y="${padT}" width="${chartW}" height="${chartH}" fill="transparent" aria-hidden="true" />`;
+
+        if (hasIbxOverlay) {
+          const ix = xToPx(ibxTpm);
+          const yBot = padT + chartH;
+          const yTop = yToPx(ibxCorridorMiles);
+          const ibxTip = `IBX corridor (combined line): ${formatScatterDistanceMiles(ibxCorridorMiles)} mi total height at ${formatScatterTripsPerMonth(ibxTpm)} trips/mo`;
+          svg +=
+            `<g class="scatterIbxCorridorWrap">` +
+            `<title>${escSvgText(ibxTip)}</title>` +
+            `<line class="scatterIbxCorridorLine" x1="${ix}" y1="${yBot}" x2="${ix}" y2="${yTop}" stroke="${SCATTER_IBX_LINE_COLOR}" stroke-width="3" stroke-dasharray="10 6" stroke-linecap="round" />` +
+            `</g>`;
+        }
+
+        if (hasDots) {
+          for (const p of points) {
+            const cx = xToPx(p.x);
+            const cy = yToPx(p.y);
+            const ik = String(p.industryKey ?? "").trim();
+            const fill = routeIndustryScatterFill(ik);
+            const industryDisplay = routeIndustryScatterPointIndustryDisplay(p);
+            const tip = `${industryDisplay}: ${formatScatterDistanceMiles(p.y)} mi total route, ${formatScatterTripsPerMonth(p.x)} trips/mo`;
+            const routeAttr = escAttr(String(p.routeId ?? ""));
+            svg +=
+              `<g class="scatterPointGroup" data-route-id="${routeAttr}">` +
+              `<title>${escSvgText(tip)}</title>` +
+              `<circle class="scatterChartPoint" cx="${cx}" cy="${cy}" r="5" fill="${fill}" style="pointer-events:none" />` +
+              `<circle class="scatterChartPoint scatterChartPoint--hit" cx="${cx}" cy="${cy}" r="14" fill="transparent" stroke="none" />` +
+              `</g>`;
+          }
+        }
+
+        svg += "</svg>";
+
+        const legendHtml = ROUTE_INDUSTRY_SCATTER_LEGEND_KEYS.map((key) => {
+          const fill = ROUTE_INDUSTRY_SCATTER_COLORS[key] || ROUTE_INDUSTRY_SCATTER_COLORS.other;
+          const label = routeIndustryScatterLegendLabel(key);
+          const icon = key !== "mixed" ? GOODS_CATEGORY_ICONS[key] : null;
+          const iconHtml = icon ? `<img src="${icon}" class="modeIcon" alt="" />` : "";
+          return `<li class="scatterLegend__row"><span class="scatterLegend__swatch" style="background:${fill}"></span>${iconHtml}<span>${escHtml(label)}</span></li>`;
+        }).join("");
+
+        host.innerHTML = `<div class="scatterChartPanel">${svg}<ul class="scatterLegend">${legendHtml}</ul></div>`;
+
+        const panelEl = host.querySelector(".scatterChartPanel");
+        const scatterTitle = "Route frequency & distance";
+        let selectedRouteId = null;
+
+        function setRouteHighlight(routeId) {
+          if (!panelEl) return;
+          const groups = panelEl.querySelectorAll(".scatterPointGroup");
+          if (!routeId) {
+            panelEl.classList.remove("scatterChartPanel--routeFocus");
+            groups.forEach((g) => g.classList.remove("scatterPointGroup--routeMatch"));
+            selectedRouteId = null;
+            return;
+          }
+          selectedRouteId = routeId;
+          panelEl.classList.add("scatterChartPanel--routeFocus");
+          groups.forEach((g) => {
+            const id = g.getAttribute("data-route-id") ?? "";
+            if (id === routeId) g.classList.add("scatterPointGroup--routeMatch");
+            else g.classList.remove("scatterPointGroup--routeMatch");
+          });
+        }
+
+        const backdrop = panelEl?.querySelector(".scatterChartBackdrop");
+        if (backdrop) backdrop.addEventListener("click", () => setRouteHighlight(null));
+
+        if (!hasDots) return;
+
+        const hits = host.querySelectorAll(".scatterChartPoint--hit");
+        hits.forEach((hit, idx) => {
+          const p = points[idx];
+          if (!p) return;
+          hit.setAttribute("tabindex", "0");
+          hit.setAttribute("role", "button");
+          const industryDisplay = routeIndustryScatterPointIndustryDisplay(p);
+          const tpmStr = formatScatterTripsPerMonth(p.x);
+          const miStr = formatScatterDistanceMiles(p.y);
+          const routeKey = String(p.routeId ?? "").trim();
+          const ptsOnChart = routeKey ? (routeCountByRoute.get(routeKey) ?? 1) : 1;
+          hit.setAttribute(
+            "aria-label",
+            `${industryDisplay} route: ${tpmStr} trips per month, ${miStr} miles total distance. Same route shows ${ptsOnChart} dot${ptsOnChart === 1 ? "" : "s"}. Click again to clear highlight or click chart background.`
+          );
+          const pick = () => {
+            showChartSelection({
+              title: scatterTitle,
+              subtitle: "Whole supply route",
+              rows: [
+                { label: "Industry", value: industryDisplay },
+                { label: "Trips per month", value: tpmStr },
+                { label: "Total route distance", value: `${miStr} mi` }
+              ]
+            });
+          };
+          const onActivate = () => {
+            if (routeKey && selectedRouteId === routeKey) setRouteHighlight(null);
+            else if (routeKey) setRouteHighlight(routeKey);
+            else setRouteHighlight(null);
+            pick();
+          };
+          hit.addEventListener("click", (ev) => {
+            ev.stopPropagation();
+            onActivate();
+          });
+          hit.addEventListener("keydown", (ev) => chartSelectionKeyActivate(ev, onActivate));
+        });
+      }
+
       function roleLabel(key) {
         return ROLE_LABELS[key] || (key ? key : "Unknown");
       }
@@ -2133,6 +2393,59 @@
         });
       }
 
+      /**
+       * Per-participant counts aligned with Overview: locations = company + origination +
+       * destination + stopping (same rules as the aggregate loop). Segments = drawn
+       * transportation legs on supply-chain branches, plus conductor IBX/current segments if any.
+       */
+      function participantSurveyLocationLegCounts(state) {
+        const ind = state?.industry ?? {};
+        const locs = state?.locations ?? [];
+        let locCompany = 0;
+        for (const loc of locs) {
+          if (loc?.locationType === "workplace") locCompany++;
+        }
+        let locOrigination = 0;
+        let locDestination = 0;
+        let locStopping = 0;
+        let drawnLegs = 0;
+
+        const rawList = ind.rawMaterialBranches ?? [];
+        const prodList = ind.productBranches ?? [];
+        for (const b of [...rawList, ...prodList]) {
+          if (!b) continue;
+          const validOrigin =
+            typeof b.originX === "number" &&
+            typeof b.originY === "number" &&
+            b.originCategoryKey &&
+            b.originCategoryKey !== "skipped";
+          if (validOrigin) locOrigination++;
+
+          const diag = b.supplyChainDiagram ?? {};
+          if (String(diag.destinationCategoryKey ?? "").trim()) locDestination++;
+          for (const n of diag.modalChangeNodes ?? []) {
+            if (n && String(n.modalChangeKey ?? "").trim()) locStopping++;
+          }
+
+          const legs = diag.transportLegs ?? [];
+          const drawn = b.supplyChainTransportRoutes ?? [];
+          for (let i = 0; i < legs.length; i++) {
+            const pts = drawn[i]?.points;
+            if (!Array.isArray(pts) || pts.length < 2) continue;
+            drawnLegs++;
+          }
+        }
+
+        const conductorLegs =
+          (state?.routes?.current?.segments?.length ?? 0) +
+          (state?.routes?.ibx?.segments?.length ?? 0);
+
+        return {
+          locations: locCompany + locOrigination + locDestination + locStopping,
+          segments: drawnLegs + conductorLegs
+        };
+      }
+
       async function loadAnalysis() {
         const subtitle = document.getElementById("topbarSubtitle");
         const errorBanner = document.getElementById("errorBanner");
@@ -2217,6 +2530,8 @@
 
         /** One entry per drawn leg with branch trip frequency: { x: trips/month, y: miles, modeKey }. */
         const scatterSegmentFrequencyDistancePoints = [];
+        /** One entry per drawn supply route: { x, y, industryKey, industryMixDetail?, routeId }. */
+        const scatterRouteIndustryFrequencyPoints = [];
 
         /** Per goods category: Σ participant mode dependency (full amount to each selected category). */
         const hugeDepByCat = new Map();
@@ -2321,6 +2636,25 @@
                     modeKey,
                     routeId
                   });
+                }
+                if (chainHasDrawn) {
+                  const totalMiles = branchTotalTransportMiles(b);
+                  if (totalMiles >= SCATTER_MIN_LEG_MILES) {
+                    const routeGoodsCats = participantGoodsCategoriesForDependency(ind);
+                    const routeIndustryKey =
+                      routeGoodsCats.length > 1 ? "mixed" : routeGoodsCats[0] ?? "other";
+                    const routeIndustryMixDetail =
+                      routeGoodsCats.length > 1
+                        ? routeGoodsCats.map((k) => GOODS_CATEGORY_LABELS[k] ?? k).join(" + ")
+                        : "";
+                    scatterRouteIndustryFrequencyPoints.push({
+                      x: tpm,
+                      y: totalMiles,
+                      industryKey: routeIndustryKey,
+                      industryMixDetail: routeIndustryMixDetail,
+                      routeId
+                    });
+                  }
                 }
               }
             }
@@ -2485,6 +2819,7 @@
         });
 
         scatterChartCachePoints = scatterSegmentFrequencyDistancePoints;
+        scatterRouteIndustryChartCachePoints = scatterRouteIndustryFrequencyPoints;
         await ensureIbxCorridorMiles();
         syncIbxScatterInputFromStorage();
         const tpmIbxStored = readStoredIbxScatterTpm();
@@ -2508,14 +2843,21 @@
           }
         );
 
+        renderRouteIndustryFrequencyScatterChart(
+          "transportRouteIndustryFrequencyChart",
+          scatterRouteIndustryFrequencyPoints,
+          {
+            ibxTpm: tpmIbxStored,
+            ibxCorridorMiles: ibxMilesCached
+          }
+        );
+
         // ── Participant table ──────────────────────────────────────────
 
         const tbody = document.getElementById("participantTableBody");
         tbody.innerHTML = valid.map(d => {
           const ind = d.state?.industry ?? {};
-          const locs = (d.state?.locations ?? []).length;
-          const segs = (d.state?.routes?.current?.segments ?? []).length
-                     + (d.state?.routes?.ibx?.segments ?? []).length;
+          const { locations: locs, segments: segs } = participantSurveyLocationLegCounts(d.state);
           const rawMats = (ind.rawMaterials ?? []).filter(Boolean);
           const prods = (ind.products ?? []).filter(Boolean);
           const role = roleLabel(ind.roleKey);
