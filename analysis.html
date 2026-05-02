@@ -125,6 +125,49 @@
         color: var(--muted);
       }
 
+      .statCard--clickable {
+        cursor: pointer;
+        font-family: inherit;
+        text-align: left;
+        position: relative;
+        transition: transform 0.15s ease, box-shadow 0.15s ease;
+      }
+
+      .statCard--clickable:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 14px var(--shadow-strong);
+      }
+
+      .statCard--clickable:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+      }
+
+      .statCard--clickable::after {
+        content: "";
+        position: absolute;
+        top: 14px;
+        right: 14px;
+        width: 8px;
+        height: 8px;
+        border-right: 2px solid var(--muted);
+        border-bottom: 2px solid var(--muted);
+        transform: rotate(45deg);
+        transition: transform 0.2s ease;
+      }
+
+      .statCard--clickable[aria-expanded="true"]::after {
+        transform: rotate(-135deg);
+      }
+
+      .overviewBreakdown {
+        margin-top: 14px;
+      }
+
+      .overviewBreakdown[hidden] {
+        display: none;
+      }
+
       /* ── Two-column analysis grid ── */
       .analysisGrid {
         display: grid;
@@ -134,6 +177,98 @@
 
       @media (max-width: 740px) {
         .analysisGrid { grid-template-columns: 1fr; }
+      }
+
+      .breakdownsGrid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+        gap: 16px;
+      }
+
+      /* ── Pie chart (Breakdowns) ── */
+      .pieHost {
+        min-height: 140px;
+      }
+
+      .piePanel {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 16px;
+      }
+
+      .pieSvg {
+        width: 200px;
+        height: 200px;
+        max-width: 100%;
+        flex-shrink: 0;
+      }
+
+      .pieLegend {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        flex: 1;
+        min-width: 140px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      .pieLegend__row {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        font-size: 12px;
+        line-height: 1.35;
+      }
+
+      .pieLegend__swatch {
+        width: 10px;
+        height: 10px;
+        border-radius: 2px;
+        flex-shrink: 0;
+        margin-top: 3px;
+      }
+
+      .pieLegend__label {
+        font-weight: 600;
+        color: var(--text);
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        flex-wrap: wrap;
+      }
+
+      .pieLegend__pct {
+        font-weight: 800;
+        color: var(--accent);
+        white-space: nowrap;
+      }
+
+      .panelCard__hint {
+        font-size: 11px;
+        color: var(--muted);
+        font-weight: 500;
+        margin: -10px 0 12px 0;
+      }
+
+      .topFiveList {
+        margin: 0;
+        padding-left: 1.25em;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--text);
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+
+      .topFiveList li {
+        word-break: break-word;
+        line-height: 1.4;
       }
 
       /* ── Panel card ── */
@@ -310,38 +445,88 @@
       <div class="sectionBlock">
         <p class="sectionTitle">Overview</p>
         <div class="statGrid" id="statGrid">
-          <div class="statCard"><div class="statCard__value" id="statParticipants">—</div><div class="statCard__label">Participants</div></div>
-          <div class="statCard"><div class="statCard__value" id="statCompanies">—</div><div class="statCard__label">Companies</div></div>
-          <div class="statCard"><div class="statCard__value" id="statLocations">—</div><div class="statCard__label">Locations</div></div>
-          <div class="statCard"><div class="statCard__value" id="statSegments">—</div><div class="statCard__label">Route Segments</div></div>
-          <div class="statCard"><div class="statCard__value" id="statRawMaterials">—</div><div class="statCard__label">Raw Materials</div></div>
-          <div class="statCard"><div class="statCard__value" id="statProducts">—</div><div class="statCard__label">Products</div></div>
+          <button type="button" class="statCard statCard--clickable" data-target="participantsRolesBreakdown" aria-expanded="false" aria-controls="participantsRolesBreakdown">
+            <div class="statCard__value" id="statParticipants">—</div>
+            <div class="statCard__label">Participants</div>
+          </button>
+          <button type="button" class="statCard statCard--clickable" data-target="companiesBreakdown" aria-expanded="false" aria-controls="companiesBreakdown">
+            <div class="statCard__value" id="statCompanies">—</div>
+            <div class="statCard__label">Companies</div>
+          </button>
+          <button type="button" class="statCard statCard--clickable" data-target="locationsBreakdown" aria-expanded="false" aria-controls="locationsBreakdown">
+            <div class="statCard__value" id="statLocations">—</div>
+            <div class="statCard__label">Locations</div>
+          </button>
+          <button type="button" class="statCard statCard--clickable" data-target="routesBreakdown" aria-expanded="false" aria-controls="routesBreakdown">
+            <div class="statCard__value" id="statSegments">—</div>
+            <div class="statCard__label">Routes</div>
+          </button>
+          <button type="button" class="statCard statCard--clickable" data-target="rawMaterialsOverviewBreakdown" aria-expanded="false" aria-controls="rawMaterialsOverviewBreakdown">
+            <div class="statCard__value" id="statRawMaterials">—</div>
+            <div class="statCard__label">Raw Materials</div>
+          </button>
+          <button type="button" class="statCard statCard--clickable" data-target="productsOverviewBreakdown" aria-expanded="false" aria-controls="productsOverviewBreakdown">
+            <div class="statCard__value" id="statProducts">—</div>
+            <div class="statCard__label">Products</div>
+          </button>
+        </div>
+        <div class="overviewBreakdown panelCard" id="participantsRolesBreakdown" hidden>
+          <p class="panelCard__title">Participants — roles</p>
+          <div class="barList" id="participantsRolesBreakdownList"><div class="emptyMsg">Loading<span class="loadingDots"></span></div></div>
+        </div>
+        <div class="overviewBreakdown panelCard" id="locationsBreakdown" hidden>
+          <p class="panelCard__title">Locations breakdown</p>
+          <div class="barList" id="locationsBreakdownList"><div class="emptyMsg">Loading<span class="loadingDots"></span></div></div>
+        </div>
+        <div class="overviewBreakdown panelCard" id="routesBreakdown" hidden>
+          <p class="panelCard__title">Routes breakdown</p>
+          <div class="barList" id="routesBreakdownList"><div class="emptyMsg">Loading<span class="loadingDots"></span></div></div>
+        </div>
+        <div class="overviewBreakdown panelCard" id="companiesBreakdown" hidden>
+          <p class="panelCard__title">Companies — goods categories</p>
+          <div class="barList" id="companiesBreakdownList"><div class="emptyMsg">Loading<span class="loadingDots"></span></div></div>
+        </div>
+        <div class="overviewBreakdown panelCard" id="rawMaterialsOverviewBreakdown" hidden>
+          <p class="panelCard__title">Raw Materials breakdown</p>
+          <div class="barList" id="rawMaterialsOverviewBreakdownList"><div class="emptyMsg">Loading<span class="loadingDots"></span></div></div>
+        </div>
+        <div class="overviewBreakdown panelCard" id="productsOverviewBreakdown" hidden>
+          <p class="panelCard__title">Products breakdown</p>
+          <div class="barList" id="productsOverviewBreakdownList"><div class="emptyMsg">Loading<span class="loadingDots"></span></div></div>
         </div>
       </div>
 
       <!-- Breakdowns -->
       <div class="sectionBlock">
         <p class="sectionTitle">Breakdowns</p>
-        <div class="analysisGrid">
+        <div class="breakdownsGrid">
 
           <div class="panelCard">
             <p class="panelCard__title">Transport Modes</p>
-            <div class="barList" id="transportBreakdown"><div class="emptyMsg">Loading<span class="loadingDots"></span></div></div>
+            <p class="panelCard__hint">Share of drawn route segments by mode</p>
+            <div id="transportBreakdown" class="pieHost"><div class="emptyMsg">Loading<span class="loadingDots"></span></div></div>
+          </div>
+
+          <div class="panelCard">
+            <p class="panelCard__title">Companies — goods categories</p>
+            <p class="panelCard__hint">Share of participants (one count per participant per category)</p>
+            <div id="companiesGoodsBreakdown" class="pieHost"><div class="emptyMsg">Loading<span class="loadingDots"></span></div></div>
           </div>
 
           <div class="panelCard">
             <p class="panelCard__title">Roles</p>
-            <div class="barList" id="roleBreakdown"><div class="emptyMsg">Loading<span class="loadingDots"></span></div></div>
+            <p class="panelCard__hint">Share of participants</p>
+            <div id="roleBreakdown" class="pieHost"><div class="emptyMsg">Loading<span class="loadingDots"></span></div></div>
           </div>
 
           <div class="panelCard">
             <p class="panelCard__title">Top Raw Materials</p>
-            <div class="barList" id="rawMaterialBreakdown"><div class="emptyMsg">Loading<span class="loadingDots"></span></div></div>
+            <ol class="topFiveList" id="rawMaterialBreakdown"><li class="emptyMsg" style="list-style:none;margin-left:-1em">Loading<span class="loadingDots"></span></li></ol>
           </div>
 
           <div class="panelCard">
             <p class="panelCard__title">Top Products</p>
-            <div class="barList" id="productBreakdown"><div class="emptyMsg">Loading<span class="loadingDots"></span></div></div>
+            <ol class="topFiveList" id="productBreakdown"><li class="emptyMsg" style="list-style:none;margin-left:-1em">Loading<span class="loadingDots"></span></li></ol>
           </div>
 
         </div>
@@ -395,6 +580,34 @@
         other: "Others"
       };
 
+      /** Goods categories on industry profile — keys match participant survey (see app.js). */
+      const GOODS_CATEGORY_KEYS = new Set([
+        "recyclables",
+        "food",
+        "construction",
+        "automotive",
+        "light_fabrication",
+        "high_tech",
+        "other"
+      ]);
+      const GOODS_CATEGORY_LABELS = {
+        recyclables: "Recyclables",
+        food: "Food",
+        construction: "Construction Materials",
+        automotive: "Automotive Parts",
+        light_fabrication: "Light Fabrication",
+        high_tech: "High-tech Productions",
+        other: "Others"
+      };
+      const GOODS_CATEGORY_ICONS = {
+        recyclables: "Icons/Products/Recyclables.svg",
+        food: "Icons/Products/Food.svg",
+        construction: "Icons/Products/COnstruction_materials.svg",
+        automotive: "Icons/Products/Auto_parts.svg",
+        light_fabrication: "Icons/Products/Light_fabrication.svg",
+        high_tech: "Icons/Products/Tech.svg"
+      };
+
       function roleLabel(key) {
         return ROLE_LABELS[key] || (key ? key : "Unknown");
       }
@@ -440,6 +653,98 @@
           .map(([label, count]) => ({ label, count }));
       }
 
+      const PIE_COLORS = [
+        "#E99894",
+        "#9ec8f7",
+        "#74d9b8",
+        "#f0c070",
+        "#c94f7c",
+        "#c4aed4",
+        "#7d5f6c",
+        "#5ab89a"
+      ];
+
+      function pieSlicePath(cx, cy, radius, angleStart, angleEnd) {
+        const x1 = cx + radius * Math.cos(angleStart);
+        const y1 = cy + radius * Math.sin(angleStart);
+        const x2 = cx + radius * Math.cos(angleEnd);
+        const y2 = cy + radius * Math.sin(angleEnd);
+        const largeArc = angleEnd - angleStart > Math.PI ? 1 : 0;
+        return `M ${cx} ${cy} L ${x1} ${y1} A ${radius} ${radius} 0 ${largeArc} 1 ${x2} ${y2} Z`;
+      }
+
+      function renderPieChart(hostId, items) {
+        const host = document.getElementById(hostId);
+        if (!host) return;
+        const total = items.reduce((s, it) => s + (Number(it.count) || 0), 0);
+        if (!items.length || total <= 0) {
+          host.innerHTML = '<p class="emptyMsg" style="padding:16px 0">No data</p>';
+          return;
+        }
+
+        const cx = 100;
+        const cy = 100;
+        const radius = 95;
+        let cum = 0;
+        let colorIdx = 0;
+        const paths = [];
+        const legendRows = [];
+
+        for (const it of items) {
+          const c = Number(it.count) || 0;
+          if (c <= 0) continue;
+
+          const a0 = (-Math.PI / 2) + (cum / total) * 2 * Math.PI;
+          cum += c;
+          const a1 = (-Math.PI / 2) + (cum / total) * 2 * Math.PI;
+
+          const color = PIE_COLORS[colorIdx % PIE_COLORS.length];
+          colorIdx++;
+
+          paths.push(
+            `<path d="${pieSlicePath(cx, cy, radius, a0, a1)}" fill="${color}" stroke="var(--panel)" stroke-width="2" stroke-linejoin="round" />`
+          );
+
+          const pct = ((c / total) * 100).toFixed(1);
+          const iconHtml = it.icon ? `<img src="${it.icon}" class="modeIcon" alt="" />` : "";
+          legendRows.push(
+            `<li class="pieLegend__row"><span class="pieLegend__swatch" style="background:${color}"></span>` +
+            `<span class="pieLegend__label">${iconHtml}${escHtml(it.label)} <span class="pieLegend__pct">${pct}%</span></span></li>`
+          );
+        }
+
+        if (!paths.length) {
+          host.innerHTML = '<p class="emptyMsg" style="padding:16px 0">No data</p>';
+          return;
+        }
+
+        host.innerHTML =
+          `<div class="piePanel"><svg class="pieSvg" viewBox="0 0 200 200" aria-hidden="true">${paths.join("")}</svg>` +
+          `<ul class="pieLegend">${legendRows.join("")}</ul></div>`;
+      }
+
+      function renderTopFiveList(listId, items, totalDenom) {
+        const el = document.getElementById(listId);
+        if (!el) return;
+        const top = items.slice(0, 5);
+        let denom = totalDenom;
+        if (typeof denom !== "number" || denom <= 0) {
+          denom = items.reduce((s, x) => s + x.count, 0);
+        }
+
+        if (!top.length || denom <= 0) {
+          el.innerHTML = '<li class="emptyMsg" style="list-style:none;margin-left:-1em">No data</li>';
+          return;
+        }
+
+        el.innerHTML = top
+          .map(({ label, count }) => {
+            const pct = ((count / denom) * 100).toFixed(1);
+            return `<li>${escHtml(label)} — <span style="font-weight:700;color:var(--accent)">${pct}%</span> <span style="font-weight:500;color:var(--muted);font-size:11px">of mentions</span></li>`;
+          })
+          .join("");
+      }
+
       async function loadAnalysis() {
         const subtitle = document.getElementById("topbarSubtitle");
         const errorBanner = document.getElementById("errorBanner");
@@ -460,7 +765,15 @@
           subtitle.textContent = "No participants yet";
           document.getElementById("participantTableBody").innerHTML =
             '<tr><td colspan="7" class="emptyMsg">No participants found</td></tr>';
-          ["transportBreakdown","roleBreakdown","rawMaterialBreakdown","productBreakdown"]
+          ["transportBreakdown","companiesGoodsBreakdown","roleBreakdown"].forEach((id) => {
+            const n = document.getElementById(id);
+            if (n) n.innerHTML = '<p class="emptyMsg" style="padding:16px 0">No data</p>';
+          });
+          ["rawMaterialBreakdown","productBreakdown"].forEach((id) => {
+            const n = document.getElementById(id);
+            if (n) n.innerHTML = '<li class="emptyMsg" style="list-style:none;margin-left:-1em">No data</li>';
+          });
+          ["participantsRolesBreakdownList","locationsBreakdownList","routesBreakdownList","companiesBreakdownList","rawMaterialsOverviewBreakdownList","productsOverviewBreakdownList"]
             .forEach(id => { document.getElementById(id).innerHTML = '<p class="emptyMsg" style="padding:16px 0">No data</p>'; });
           return;
         }
@@ -479,39 +792,106 @@
         // ── Aggregate stats ──────────────────────────────────────────
 
         const companies = new Set();
-        let totalLocations = 0;
-        let totalSegments = 0;
         const allRawMaterials = [];
         const allProducts = [];
         const transportCounts = new Map();
         const roleCounts = new Map();
+        /** Per-participant tally: how many participants selected each goods category (Companies overview). */
+        const goodsCategoryCounts = new Map();
+
+        // Participants overview — bucket into Worker / Transporter / Manager / Others
+        let roleWorkerOv = 0;
+        let roleTransporterOv = 0;
+        let roleManagerOv = 0;
+        let roleOthersOv = 0;
+
+        // Locations sub-counts (Company / Origination / Destination / Stopping)
+        let locCompany = 0;
+        let locOrigination = 0;
+        let locDestination = 0;
+        let locStopping = 0;
+
+        // Routes sub-counts (segments by mode) and whole-supply-chain count
+        let segHuge = 0;
+        let segSmall = 0;
+        let segTrain = 0;
+        let segOther = 0;
+        let supplyChainCount = 0;
 
         for (const d of valid) {
           const ind = d.state?.industry ?? {};
           const locs = d.state?.locations ?? [];
-          const segs = [
-            ...(d.state?.routes?.current?.segments ?? []),
-            ...(d.state?.routes?.ibx?.segments ?? [])
-          ];
 
           if (ind.companyName) companies.add(ind.companyName.trim());
-          totalLocations += locs.length;
-          totalSegments += segs.length;
+
+          const rawGoods = ind.goodsCategoryKeys;
+          let countedGoodsForParticipant = false;
+          if (Array.isArray(rawGoods) && rawGoods.length > 0) {
+            const seen = new Set();
+            for (const k of rawGoods) {
+              const key = String(k ?? "").trim();
+              if (!GOODS_CATEGORY_KEYS.has(key)) continue;
+              if (seen.has(key)) continue;
+              seen.add(key);
+              goodsCategoryCounts.set(key, (goodsCategoryCounts.get(key) ?? 0) + 1);
+              countedGoodsForParticipant = true;
+            }
+          }
+          if (!countedGoodsForParticipant) {
+            goodsCategoryCounts.set(
+              "__not_specified",
+              (goodsCategoryCounts.get("__not_specified") ?? 0) + 1
+            );
+          }
 
           const role = ind.roleKey || "other";
           roleCounts.set(role, (roleCounts.get(role) ?? 0) + 1);
 
-          // Transport modes from branch legs
+          const rkRaw = String(ind.roleKey ?? "").trim();
+          if (rkRaw === "worker") roleWorkerOv++;
+          else if (rkRaw === "transporter") roleTransporterOv++;
+          else if (rkRaw === "manager") roleManagerOv++;
+          else roleOthersOv++;
+
+          for (const loc of locs) {
+            if (loc?.locationType === "workplace") locCompany++;
+          }
+
           const branches = [
             ...(ind.rawMaterialBranches ?? []),
             ...(ind.productBranches ?? [])
           ];
           for (const b of branches) {
             if (!b) continue;
-            for (const leg of (b.transportLegs ?? [])) {
-              const m = leg?.modeKey;
-              if (m) transportCounts.set(m, (transportCounts.get(m) ?? 0) + 1);
+
+            const validOrigin =
+              typeof b.originX === "number" &&
+              typeof b.originY === "number" &&
+              b.originCategoryKey &&
+              b.originCategoryKey !== "skipped";
+            if (validOrigin) locOrigination++;
+
+            const diag = b.supplyChainDiagram ?? {};
+            if (String(diag.destinationCategoryKey ?? "").trim()) locDestination++;
+            for (const n of (diag.modalChangeNodes ?? [])) {
+              if (n && String(n.modalChangeKey ?? "").trim()) locStopping++;
             }
+
+            const legs = diag.transportLegs ?? [];
+            const drawn = b.supplyChainTransportRoutes ?? [];
+            let chainHasDrawn = false;
+            for (let i = 0; i < legs.length; i++) {
+              const pts = drawn[i]?.points;
+              if (!Array.isArray(pts) || pts.length < 2) continue;
+              chainHasDrawn = true;
+              const m = legs[i]?.modeKey;
+              if (m) transportCounts.set(m, (transportCounts.get(m) ?? 0) + 1);
+              if (m === "huge_truck") segHuge++;
+              else if (m === "small_truck") segSmall++;
+              else if (m === "train") segTrain++;
+              else segOther++;
+            }
+            if (chainHasDrawn) supplyChainCount++;
           }
 
           for (const rm of (ind.rawMaterials ?? [])) {
@@ -523,14 +903,72 @@
           }
         }
 
+        const totalLocations = locCompany + locOrigination + locDestination + locStopping;
+
         // ── Update stats ──────────────────────────────────────────────
 
         document.getElementById("statParticipants").textContent = valid.length;
         document.getElementById("statCompanies").textContent = companies.size;
+
+        // ── Participants (roles breakdown in Overview) ───────────────
+
+        renderBarList(
+          "participantsRolesBreakdownList",
+          [
+            { label: "Worker", count: roleWorkerOv },
+            { label: "Transporter", count: roleTransporterOv },
+            { label: "Manager", count: roleManagerOv },
+            { label: "Others", count: roleOthersOv }
+          ].sort((a, b) => b.count - a.count),
+          "barFill--role"
+        );
+
         document.getElementById("statLocations").textContent = totalLocations;
-        document.getElementById("statSegments").textContent = totalSegments;
+        document.getElementById("statSegments").textContent = supplyChainCount;
         document.getElementById("statRawMaterials").textContent = allRawMaterials.length;
         document.getElementById("statProducts").textContent = allProducts.length;
+
+        // ── Locations breakdown ───────────────────────────────────────
+
+        renderBarList("locationsBreakdownList", [
+          { label: "Company",     count: locCompany },
+          { label: "Origination", count: locOrigination },
+          { label: "Destination", count: locDestination },
+          { label: "Stopping",    count: locStopping }
+        ].sort((a, b) => b.count - a.count), "barFill--role");
+
+        // ── Routes breakdown (segments by mode) ───────────────────────
+
+        renderBarList("routesBreakdownList", [
+          { label: "Huge Truck Segments",  count: segHuge,  icon: TRANSPORT_ICONS.huge_truck },
+          { label: "Small Truck Segments", count: segSmall, icon: TRANSPORT_ICONS.small_truck },
+          { label: "Train Segments",       count: segTrain, icon: TRANSPORT_ICONS.train },
+          { label: "Others",               count: segOther }
+        ].sort((a, b) => b.count - a.count), "barFill--trans");
+
+        // ── Companies overview — goods categories (participants per category) ──
+
+        const companyGoodsItems = [...goodsCategoryCounts.entries()]
+          .map(([key, count]) => {
+            if (key === "__not_specified") {
+              return { label: "Not specified", count, icon: null };
+            }
+            return {
+              label: GOODS_CATEGORY_LABELS[key] ?? key,
+              count,
+              icon: GOODS_CATEGORY_ICONS[key] ?? null
+            };
+          })
+          .sort((a, b) => b.count - a.count);
+        renderBarList("companiesBreakdownList", companyGoodsItems, "barFill--role");
+
+        const rawMaterialCounts = countBy(allRawMaterials, (x) => x);
+        const rawMaterialsTop12 = rawMaterialCounts.slice(0, 12);
+        renderBarList("rawMaterialsOverviewBreakdownList", rawMaterialsTop12, "barFill--raw");
+
+        const productCounts = countBy(allProducts, (x) => x);
+        const productsTop12 = productCounts.slice(0, 12);
+        renderBarList("productsOverviewBreakdownList", productsTop12, "barFill--prod");
 
         subtitle.textContent = `${valid.length} participant${valid.length !== 1 ? "s" : ""} · updated ${new Date().toLocaleTimeString()}`;
 
@@ -544,7 +982,9 @@
             icon: TRANSPORT_ICONS[key] ?? null
           }));
 
-        renderBarList("transportBreakdown", transportItems, "barFill--trans");
+        renderPieChart("transportBreakdown", transportItems);
+
+        renderPieChart("companiesGoodsBreakdown", companyGoodsItems);
 
         // ── Roles ─────────────────────────────────────────────────────
 
@@ -552,17 +992,12 @@
           .sort((a, b) => b[1] - a[1])
           .map(([key, count]) => ({ label: roleLabel(key), count }));
 
-        renderBarList("roleBreakdown", roleItems, "barFill--role");
+        renderPieChart("roleBreakdown", roleItems);
 
-        // ── Raw materials ─────────────────────────────────────────────
+        // ── Raw materials / products (Breakdowns: top 5 lists) ────────
 
-        const rawItems = countBy(allRawMaterials, x => x).slice(0, 12);
-        renderBarList("rawMaterialBreakdown", rawItems, "barFill--raw");
-
-        // ── Products ──────────────────────────────────────────────────
-
-        const prodItems = countBy(allProducts, x => x).slice(0, 12);
-        renderBarList("productBreakdown", prodItems, "barFill--prod");
+        renderTopFiveList("rawMaterialBreakdown", rawMaterialCounts, allRawMaterials.length);
+        renderTopFiveList("productBreakdown", productCounts, allProducts.length);
 
         // ── Participant table ──────────────────────────────────────────
 
@@ -594,6 +1029,26 @@
         }).join("");
       }
 
+      function setupOverviewToggles() {
+        document.querySelectorAll(".statCard--clickable").forEach((btn) => {
+          btn.addEventListener("click", () => {
+            const id = btn.dataset.target;
+            if (!id) return;
+            const panel = document.getElementById(id);
+            if (!panel) return;
+            const isHidden = panel.hasAttribute("hidden");
+            if (isHidden) {
+              panel.removeAttribute("hidden");
+              btn.setAttribute("aria-expanded", "true");
+            } else {
+              panel.setAttribute("hidden", "");
+              btn.setAttribute("aria-expanded", "false");
+            }
+          });
+        });
+      }
+
+      setupOverviewToggles();
       loadAnalysis();
     </script>
   </body>
