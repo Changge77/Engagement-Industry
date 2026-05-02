@@ -1,3 +1,5 @@
 node_modules/
 .env
-data/
+# Track survey.db so participant data survives clone/pull; ignore other files under data/
+data/*
+!data/survey.db
