@@ -451,19 +451,28 @@
 
       .dependencyChartGrid {
         display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+        grid-template-columns: 1fr;
         gap: 16px;
+        width: 100%;
+      }
+
+      .dependencyChartGrid > .panelCard {
+        width: 100%;
+        max-width: none;
       }
 
       .barChartHost {
-        min-height: 240px;
-        overflow-x: auto;
+        width: 100%;
+        min-height: 360px;
+        padding: 4px 0 8px;
+        overflow: visible;
       }
 
       .barChartSvg {
         display: block;
-        max-width: 100%;
+        width: 100%;
         height: auto;
+        min-height: 320px;
       }
 
       .barChart__bar {
@@ -474,23 +483,29 @@
       .barChart__axis,
       .barChart__tick {
         stroke: var(--border);
+        stroke-width: 1.5;
+      }
+
+      .barChart__grid {
+        stroke: var(--muted);
+        stroke-opacity: 0.18;
         stroke-width: 1;
       }
 
       .barChart__label {
-        font-size: 9px;
+        font-size: 12px;
         font-weight: 600;
         fill: var(--muted);
       }
 
       .barChart__value {
-        font-size: 9px;
+        font-size: 12px;
         font-weight: 700;
         fill: var(--text);
       }
 
       .barChart__yTitle {
-        font-size: 10px;
+        font-size: 13px;
         font-weight: 700;
         fill: var(--text);
       }
@@ -603,9 +618,7 @@
           <div class="dependencyChartGrid">
             <div class="panelCard">
               <p class="panelCard__title">Huge truck dependency</p>
-              <p class="panelCard__hint">
-                Sum of (huge-truck leg distance × trips/month) per supply chain; participants with multiple goods categories count the full total toward each selected bar. Trips/month: week×(52÷12), day×(365÷12). Uncategorized participants attributed to Others.
-              </p>
+              <p class="panelCard__hint">leg Distance × Trips/Month</p>
               <div id="hugeTruckDependencyChart" class="barChartHost">
                 <div class="emptyMsg">Loading<span class="loadingDots"></span></div>
               </div>
@@ -846,6 +859,51 @@
         return out;
       }
 
+      /** 1, 2, or 5 × 10^n — readable axis step size. */
+      function analysisNiceStep(rawStep) {
+        if (!Number.isFinite(rawStep) || rawStep <= 0) return 1;
+        const exp = Math.floor(Math.log10(rawStep));
+        const magnitude = Math.pow(10, exp);
+        const r = rawStep / magnitude;
+        const factor = r <= 1 ? 1 : r <= 2 ? 2 : r <= 5 ? 5 : 10;
+        return factor * magnitude;
+      }
+
+      /** { scaleMax, step, tickValues } with integer-multiple ticks from 0 to scaleMax. */
+      function analysisNiceYScale(maxData, targetTickIntervals = 5) {
+        if (!Number.isFinite(maxData) || maxData <= 0) {
+          return { scaleMax: 1, step: 0.25, tickValues: [0, 0.25, 0.5, 0.75, 1] };
+        }
+        const roughStep = maxData / targetTickIntervals;
+        const step = analysisNiceStep(roughStep);
+        const numSteps = Math.max(1, Math.ceil(maxData / step - 1e-12));
+        const scaleMax = numSteps * step;
+        const tickValues = [];
+        for (let i = 0; i <= numSteps; i++) tickValues.push(Number((i * step).toPrecision(14)));
+        return { scaleMax, step, tickValues };
+      }
+
+      function analysisFormatAxisNumber(v, step) {
+        if (!Number.isFinite(v)) return "0";
+        const s = Math.abs(step);
+        if (s >= 1000) return Math.round(v).toLocaleString();
+        if (s >= 1) return Math.round(v).toLocaleString();
+        const decimals = Math.min(6, Math.max(0, -Math.floor(Math.log10(s)) + (s < 1e-6 ? 1 : 0)));
+        const rounded = Number(v.toFixed(decimals));
+        return Math.abs(rounded - Math.round(rounded)) < 1e-9
+          ? Math.round(rounded).toLocaleString()
+          : rounded.toLocaleString(undefined, { maximumFractionDigits: decimals });
+      }
+
+      function analysisFormatBarLabel(v, stepHint) {
+        if (!Number.isFinite(v)) return "0";
+        if (Math.abs(v) >= 100) return Math.round(v).toLocaleString();
+        if (stepHint >= 1) return Math.round(v).toLocaleString();
+        const s = Math.abs(stepHint) || 1;
+        const decimals = Math.min(2, Math.max(1, Math.ceil(-Math.log10(s))));
+        return v.toLocaleString(undefined, { maximumFractionDigits: decimals });
+      }
+
       function renderVerticalBarChart(hostId, items, opts) {
         const host = document.getElementById(hostId);
         if (!host) return;
@@ -858,47 +916,59 @@
           return;
         }
 
-        const W = 560;
-        const H = 260;
-        const padL = 52;
-        const padR = 16;
-        const padT = 14;
-        const padB = 72;
+        const { scaleMax, step, tickValues } = analysisNiceYScale(maxVal, 5);
+        const invScale = scaleMax > 0 ? 1 / scaleMax : 1;
+
+        const W = 980;
+        const H = 400;
+        const padL = 88;
+        const padR = 28;
+        const padT = 22;
+        const padB = 110;
         const chartW = W - padL - padR;
         const chartH = H - padT - padB;
         const n = items.length;
-        const gap = 8;
-        const barW = Math.max(4, (chartW - gap * (n - 1)) / n);
+        const gap = 18;
+        const barW = Math.max(12, (chartW - gap * (n - 1)) / n);
 
-        const fmt = (v) => (v >= 100 ? Math.round(v).toLocaleString() : v.toFixed(1));
+        let svg = `<svg class="barChartSvg" viewBox="0 0 ${W} ${H}" width="100%" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Bar chart">`;
+        svg += `<text class="barChart__yTitle" x="18" y="${padT + chartH / 2}" transform="rotate(-90 18 ${padT + chartH / 2})" text-anchor="middle">${escHtml(yAxisLabel)}</text>`;
 
-        let svg = `<svg class="barChartSvg" viewBox="0 0 ${W} ${H}" role="img" aria-label="Bar chart">`;
-        svg += `<text class="barChart__yTitle" x="12" y="${padT + chartH / 2}" transform="rotate(-90 12 ${padT + chartH / 2})" text-anchor="middle">${escHtml(yAxisLabel)}</text>`;
+        // Horizontal guides (behind bars) at each tick except y=0
+        for (const tv of tickValues) {
+          if (tv <= 0) continue;
+          const frac = tv * invScale;
+          const gy = padT + chartH * (1 - frac);
+          svg += `<line class="barChart__grid" x1="${padL}" y1="${gy}" x2="${padL + chartW}" y2="${gy}" />`;
+        }
+
         svg += `<line class="barChart__axis" x1="${padL}" y1="${padT + chartH}" x2="${padL + chartW}" y2="${padT + chartH}" />`;
         svg += `<line class="barChart__axis" x1="${padL}" y1="${padT}" x2="${padL}" y2="${padT + chartH}" />`;
 
-        const ticks = 4;
-        for (let t = 0; t <= ticks; t++) {
-          const frac = t / ticks;
+        for (const tv of tickValues) {
+          const frac = tv * invScale;
           const y = padT + chartH * (1 - frac);
-          const val = maxVal * frac;
-          svg += `<line class="barChart__tick" x1="${padL - 4}" y1="${y}" x2="${padL}" y2="${y}" />`;
-          svg += `<text class="barChart__label" x="${padL - 6}" y="${y + 3}" text-anchor="end">${escHtml(fmt(val))}</text>`;
+          svg += `<line class="barChart__tick" x1="${padL - 6}" y1="${y}" x2="${padL}" y2="${y}" />`;
+          svg += `<text class="barChart__label" x="${padL - 10}" y="${y + 4}" text-anchor="end">${escHtml(
+            analysisFormatAxisNumber(tv, step)
+          )}</text>`;
         }
 
         for (let i = 0; i < n; i++) {
           const v = values[i];
-          const h = chartH * (v / maxVal);
+          const h = chartH * Math.min(v * invScale, 1);
           const x = padL + i * (barW + gap);
           const y = padT + chartH - h;
-          svg += `<rect class="barChart__bar" x="${x}" y="${y}" width="${barW}" height="${Math.max(h, 0)}" rx="2" />`;
+          svg += `<rect class="barChart__bar" x="${x}" y="${y}" width="${barW}" height="${Math.max(h, 0)}" rx="3" />`;
           if (v > 0) {
-            svg += `<text class="barChart__value" x="${x + barW / 2}" y="${y - 4}" text-anchor="middle">${escHtml(fmt(v))}</text>`;
+            svg += `<text class="barChart__value" x="${x + barW / 2}" y="${Math.max(y - 8, padT + 14)}" text-anchor="middle">${escHtml(
+              analysisFormatBarLabel(v, step)
+            )}</text>`;
           }
           const label = items[i].label ?? "";
           const lx = x + barW / 2;
-          const ly = padT + chartH + 12;
-          svg += `<text class="barChart__label" x="${lx}" y="${ly}" text-anchor="end" transform="rotate(-42 ${lx} ${ly})">${escHtml(label)}</text>`;
+          const ly = padT + chartH + 18;
+          svg += `<text class="barChart__label" x="${lx}" y="${ly}" text-anchor="end" transform="rotate(-38 ${lx} ${ly})">${escHtml(label)}</text>`;
         }
 
         svg += "</svg>";
