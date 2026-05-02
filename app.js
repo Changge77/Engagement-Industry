@@ -15,6 +15,7 @@ let participantToken = null;
 let saveDebounceTimer = null;
 let viewingParticipantId = null;
 let viewingParticipantLabel = "";
+let conductorBranchHighlightActive = false;
 
 /** Participant map only: short company-location hint follows pointer while over the map. */
 let companyBannerPointerOnMap = false;
@@ -5469,13 +5470,23 @@ function initSharePopup() {
 
 function updateConductorRouteHighlight() {
   if (!layers?.supplyChainRoutes) return;
+  const BASE_WEIGHT = 5;
+  const pid = viewingParticipantId;
   const kind = ui.participantLeftPanelKind;
   const idx = ui.participantLeftPanelIndex;
-  const BASE_WEIGHT = 5;
   layers.supplyChainRoutes.eachLayer((line) => {
-    const lineIdx = line._conductorLocalBranchIndex ?? line._conductorBranchIndex;
-    const isSelected = idx != null && line._conductorBranchKind === kind && lineIdx === idx;
-    line.setStyle({ weight: isSelected ? BASE_WEIGHT * 2 : BASE_WEIGHT });
+    let highlight;
+    if (!pid) {
+      highlight = false;
+    } else if (!conductorBranchHighlightActive) {
+      // Whole participant focused — highlight all their routes
+      highlight = line._conductorParticipantId === pid;
+    } else {
+      // Specific branch selected — highlight only that branch
+      const lineIdx = line._conductorLocalBranchIndex ?? line._conductorBranchIndex;
+      highlight = line._conductorParticipantId === pid && line._conductorBranchKind === kind && lineIdx === idx;
+    }
+    line.setStyle({ weight: highlight ? BASE_WEIGHT * 2 : BASE_WEIGHT });
   });
 }
 
@@ -5487,6 +5498,7 @@ async function onConductorRouteClick(line) {
   await selectConductorParticipant(pid);
   ui.participantLeftPanelKind = bkind;
   ui.participantLeftPanelIndex = localIdx;
+  conductorBranchHighlightActive = true;
   openCondCard(bkind === BRANCH_KIND_PRODUCT ? "product" : "raw");
   syncConductorParticipantLeftPanel();
   updateConductorRouteHighlight();
@@ -5632,6 +5644,7 @@ function initConductorLeftPanelOnce() {
     if (Number.isNaN(i)) return;
     ui.participantLeftPanelKind = BRANCH_KIND_RAW;
     ui.participantLeftPanelIndex = i;
+    conductorBranchHighlightActive = true;
     openCondCard("raw");
     syncConductorParticipantLeftPanel();
     updateConductorRouteHighlight();
@@ -5644,6 +5657,7 @@ function initConductorLeftPanelOnce() {
     if (Number.isNaN(i)) return;
     ui.participantLeftPanelKind = BRANCH_KIND_PRODUCT;
     ui.participantLeftPanelIndex = i;
+    conductorBranchHighlightActive = true;
     openCondCard("product");
     syncConductorParticipantLeftPanel();
     updateConductorRouteHighlight();
@@ -6157,9 +6171,11 @@ async function exitConductorViewMode() {
   if (!viewingParticipantId) return;
   viewingParticipantId = null;
   viewingParticipantLabel = "";
+  conductorBranchHighlightActive = false;
   const lbl = document.getElementById("conductorViewingLabel");
   if (lbl) lbl.textContent = "";
   await applyConductorSelectionToMap();
+  updateConductorRouteHighlight();
 }
 
 function renderFilteredParticipantList() {
@@ -6433,17 +6449,36 @@ async function refreshParticipantList() {
 }
 
 async function selectConductorParticipant(id) {
-  resetConductorFeatureFilters();
   const data = await getConductorParticipantState(id, true);
+
+  // Ensure participant is visible on map. If they were hidden, rebuild the merged
+  // map first (with them included) before touching state for the sidebar.
+  const wasHidden = !conductorSelectedParticipantIds.has(data.id);
+  conductorSelectedParticipantIds.add(data.id);
+  if (wasHidden) {
+    const savedId = viewingParticipantId;
+    viewingParticipantId = null;
+    await applyConductorSelectionToMap();
+    viewingParticipantId = savedId;
+  }
+
   viewingParticipantId = data.id;
   viewingParticipantLabel = data.label;
+  conductorBranchHighlightActive = false;
+
+  // Apply single-participant state so sidebar functions (which read from `state`)
+  // show this participant's data. The map layers are NOT rebuilt here — they
+  // already reflect the merged view of all selected participants.
   applySurveyPayload(data.state, { persist: false });
-  rebuildFromState();
+
+  resetConductorFeatureFilters();
   uiUpdateStats();
   const viewLbl = document.getElementById("conductorViewingLabel");
   if (viewLbl) viewLbl.textContent = data.label;
   renderFilteredParticipantList();
   setStep("locations");
+
+  updateConductorRouteHighlight();
 }
 
 function setupConductorCreateLink() {
