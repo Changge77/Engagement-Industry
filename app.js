@@ -5509,6 +5509,15 @@ function initParticipantLeftPanelOnce() {
     openCondCard("product");
     syncParticipantLeftPanel();
   });
+
+  document.getElementById("participantAddRawMaterialBtn")?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    openParticipantRawMaterialsGate();
+  });
+  document.getElementById("participantAddProductBtn")?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    openParticipantProductsGate();
+  });
 }
 
 /* ── Stacked card system (conductor + participant) ───────────── */
@@ -6616,8 +6625,12 @@ function populateParticipantDeleteList(ul, list, currentId, selectedIds) {
     selectBtn.className = "participantRow__select";
     if (selectedIds.has(p.id)) selectBtn.classList.add("is-active");
     const t = new Date(p.updatedAt);
-    const ind = p.industryCompany ? ` · ${p.industryCompany}` : "";
-    selectBtn.textContent = `${p.label} · ${t.toLocaleString()} · ${p.counts.locations} loc / ${p.counts.currentSegments + p.counts.ibxSegments} seg${ind}`;
+    const company = p.industryCompany || p.label;
+    const dateStr = t.toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" });
+    const timeStr = t.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    const rawCount = p.counts.rawMaterials ?? 0;
+    const prodCount = p.counts.products ?? 0;
+    selectBtn.textContent = `${company} | ${dateStr}, ${timeStr} | ${rawCount} Raw material${rawCount !== 1 ? "s" : ""} / ${prodCount} Product${prodCount !== 1 ? "s" : ""}`;
     selectBtn.title = "Select participant for map filter";
     selectBtn.addEventListener("click", async () => {
       const wasSelected = selectedIds.has(p.id);

@@ -191,6 +191,8 @@ app.get("/api/conductor/participants", (req, res) => {
     let segCurrent = 0;
     let segIbx = 0;
     let industryCompany = "";
+    let rawMaterialsCount = 0;
+    let productsCount = 0;
     try {
       const s = r.survey;
       if (s && typeof s === "object") {
@@ -198,6 +200,8 @@ app.get("/api/conductor/participants", (req, res) => {
         segCurrent = s.routes?.current?.segments?.length ?? 0;
         segIbx = s.routes?.ibx?.segments?.length ?? 0;
         industryCompany = String(s.industry?.companyName ?? "").trim();
+        rawMaterialsCount = Array.isArray(s.industry?.rawMaterials) ? s.industry.rawMaterials.length : 0;
+        productsCount = Array.isArray(s.industry?.products) ? s.industry.products.length : 0;
       }
     } catch {
       // ignore
@@ -208,7 +212,7 @@ app.get("/api/conductor/participants", (req, res) => {
       createdAt: r.createdAt,
       updatedAt: r.updatedAt,
       industryCompany: industryCompany ? industryCompany.slice(0, 80) : "",
-      counts: { locations: locCount, currentSegments: segCurrent, ibxSegments: segIbx }
+      counts: { locations: locCount, currentSegments: segCurrent, ibxSegments: segIbx, rawMaterials: rawMaterialsCount, products: productsCount }
     };
   });
   res.json(list);
