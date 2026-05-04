@@ -120,7 +120,10 @@
           <div class="condCard condCard--raw" id="condCard_raw">
             <div class="condCard__peek">
               <span class="condCard__title">Raw Materials</span>
-              <div id="participantRawMaterialPills" class="condCard__pills participantPillRow" role="tablist" aria-label="Raw materials"></div>
+              <div class="condCard__peekRow">
+                <div id="participantRawMaterialPills" class="condCard__pills participantPillRow" role="tablist" aria-label="Raw materials"></div>
+                <button class="condCard__addPill" id="participantAddRawMaterialBtn" type="button" title="Add raw material" aria-label="Add raw material">+</button>
+              </div>
             </div>
             <div class="condCard__body" id="condCardBody_raw">
               <!-- participantLeftShell: JS uses this for show/hide guard -->
@@ -144,7 +147,10 @@
           <div class="condCard condCard--product" id="condCard_product">
             <div class="condCard__peek">
               <span class="condCard__title">Products</span>
-              <div id="participantProductPills" class="condCard__pills participantPillRow participantPillRow--products" role="tablist" aria-label="Products"></div>
+              <div class="condCard__peekRow">
+                <div id="participantProductPills" class="condCard__pills participantPillRow participantPillRow--products" role="tablist" aria-label="Products"></div>
+                <button class="condCard__addPill" id="participantAddProductBtn" type="button" title="Add product" aria-label="Add product">+</button>
+              </div>
             </div>
             <div class="condCard__body" id="condCardBody_product">
               <div id="participantProductDetail" class="is-hidden">

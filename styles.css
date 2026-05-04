@@ -2477,6 +2477,13 @@ body[data-survey-mode="participant"] .conductorMapArea #map {
 }
 
 /* ── Pill rows in peek ───────────────────────────────────────── */
+.condCard__peekRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
 .condCard__pills {
   display: flex;
   flex-wrap: nowrap;
@@ -2488,6 +2495,29 @@ body[data-survey-mode="participant"] .conductorMapArea #map {
 .condCard__pills .participantPill {
   font-size: 11px;
   padding: 3px 9px;
+}
+
+.condCard__addPill {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 1.5px dashed var(--muted);
+  background: none;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1;
+  padding: 0;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.condCard__addPill:hover {
+  border-color: var(--text);
+  color: var(--text);
 }
 
 /* ── Card body (fills remaining space below 72px peek) ────────── */
