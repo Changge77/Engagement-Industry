@@ -5900,26 +5900,28 @@ function initTransportIconsToggle() {
 }
 
 function updateConductorRouteHighlight() {
-  if (!layers?.supplyChainRoutes) return;
-  const BASE_WEIGHT = 5;
-  const pid = viewingParticipantId;
-  const kind = ui.participantLeftPanelKind;
-  const idx = ui.participantLeftPanelIndex;
-  layers.supplyChainRoutes.eachLayer((line) => {
-    let highlight;
-    if (!pid) {
-      highlight = false;
-    } else if (!conductorBranchHighlightActive) {
-      // Whole participant focused — highlight all their routes
-      highlight = line._conductorParticipantId === pid;
-    } else {
-      // Specific branch selected — highlight only that branch
-      const lineIdx = line._conductorLocalBranchIndex ?? line._conductorBranchIndex;
-      highlight = line._conductorParticipantId === pid && line._conductorBranchKind === kind && lineIdx === idx;
-    }
-    line.setStyle({ weight: highlight ? BASE_WEIGHT * 2 : BASE_WEIGHT });
-  });
-  applyConductorRouteVisualState();
+  if (layers?.supplyChainRoutes) {
+    const BASE_WEIGHT = 5;
+    const pid = viewingParticipantId;
+    const kind = ui.participantLeftPanelKind;
+    const idx = ui.participantLeftPanelIndex;
+    layers.supplyChainRoutes.eachLayer((line) => {
+      let highlight;
+      if (!pid) {
+        highlight = false;
+      } else if (!conductorBranchHighlightActive) {
+        // Whole participant focused — highlight all their routes
+        highlight = line._conductorParticipantId === pid;
+      } else {
+        // Specific branch selected — highlight only that branch
+        const lineIdx = line._conductorLocalBranchIndex ?? line._conductorBranchIndex;
+        highlight = line._conductorParticipantId === pid && line._conductorBranchKind === kind && lineIdx === idx;
+      }
+      line.setStyle({ weight: highlight ? BASE_WEIGHT * 2 : BASE_WEIGHT });
+    });
+    applyConductorRouteVisualState();
+  }
+  if (SURVEY_MODE === "conductor") renderFilteredParticipantList();
 }
 
 function conductorLineIsFocused(line) {
@@ -6743,6 +6745,10 @@ function populateParticipantDeleteList(ul, list, currentId, selectedIds) {
     const li = document.createElement("li");
     const row = document.createElement("div");
     row.className = "participantRow";
+    if (currentId && p.id === currentId) {
+      if (conductorBranchHighlightActive) row.classList.add("participantRow--viewing-route-focus");
+      else row.classList.add("participantRow--viewing-detail");
+    }
 
     const selectBtn = document.createElement("button");
     selectBtn.type = "button";

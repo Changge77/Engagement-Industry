@@ -2382,6 +2382,31 @@ body[data-survey-mode="participant"] #app.conductorWorkspace {
   border-radius: 0;
 }
 
+/* Conductor participant list: View Details = salmon block; route/branch focus = pink + wide salmon frame */
+body[data-survey-mode="conductor"] .participantRow.participantRow--viewing-detail > .participantRow__select {
+  background: #e99894;
+  border-color: #d67a72;
+  color: #3d2a32;
+  box-shadow: none;
+}
+
+body[data-survey-mode="conductor"] .participantRow.participantRow--viewing-detail > .participantRow__select:hover {
+  border-color: #c45c52;
+  background: #e08a86;
+}
+
+body[data-survey-mode="conductor"] .participantRow.participantRow--viewing-route-focus > .participantRow__select {
+  background: #fdeef3;
+  border: 3px solid #e99894;
+  color: var(--text);
+  box-shadow: none;
+}
+
+body[data-survey-mode="conductor"] .participantRow.participantRow--viewing-route-focus > .participantRow__select:hover {
+  border-color: #e99894;
+  background: #fce4eb;
+}
+
 /* Map area fills remaining space */
 .conductorMapArea {
   flex: 1;
