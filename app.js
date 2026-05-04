@@ -55,7 +55,8 @@ const LOCATION_TYPE_ICONS = {
   export: "Icons/Locations/Airport.svg",
   manufacturing: "Icons/Locations/Manufactoring.svg",
   warehouse: "Icons/Locations/Storage.svg",
-  subdistribution: "Icons/Locations/Distribution.svg"
+  subdistribution: "Icons/Locations/Distribution.svg",
+  other: "Icons/Locations/others.svg"
 };
 
 const ORIGIN_TYPE_ICONS = {
@@ -64,7 +65,8 @@ const ORIGIN_TYPE_ICONS = {
   manufacturing_facility: "Icons/Locations/Manufactoring.svg",
   airport: "Icons/Locations/Airport.svg",
   port: "Icons/Locations/Port.svg",
-  client: "Icons/General/Client.svg"
+  client: "Icons/General/Client.svg",
+  other: "Icons/Locations/others.svg"
 };
 
 const SC_LOC_TO_LOCATION_TYPE = {
@@ -193,7 +195,8 @@ const SUPPLY_CHAIN_TRANSPORT_MODE_KEYS = new Set(SUPPLY_CHAIN_TRANSPORT_MODE_OPT
 const TRANSPORT_MODE_ICONS = {
   train: "Icons/Modes/Rail.svg",
   huge_truck: "Icons/Modes/Large-Truck.svg",
-  small_truck: "Icons/Modes/Small_truck.svg"
+  small_truck: "Icons/Modes/Small_truck.svg",
+  other: "Icons/Modes/others_1.svg"
 };
 const ANIMATION_MODE_ICONS = {
   ...TRANSPORT_MODE_ICONS,
@@ -682,7 +685,7 @@ function formatSupplyChainDestinationDesc(dIn) {
 function markerIconForSupplyChainDestinationCategory(dIn) {
   const d = normalizeSupplyChainDiagram(dIn ?? {});
   const k = normalizeSupplyLocationKeyForDiagram(d.destinationCategoryKey);
-  const svg = k && k !== "other" ? ORIGIN_TYPE_ICONS[k] : null;
+  const svg = k ? ORIGIN_TYPE_ICONS[k] : null;
   if (svg) return markerIconFromSvgInverted(svg);
   return markerIconColored("#7c3aed");
 }
@@ -1835,9 +1838,7 @@ function addAllSupplyChainStoppingPointMarkersToLayer() {
         const locDesc = locKey === "other"
           ? (String(node?.otherDetail ?? "").trim() || "Others")
           : (locOpt?.label ?? locKey ?? "Stopping Point");
-        const iconSrc = (locKey && locKey !== "other")
-          ? (ORIGIN_TYPE_ICONS[locKey] ?? ORIGIN_TYPE_ICONS.storage_facility)
-          : ORIGIN_TYPE_ICONS.storage_facility;
+        const iconSrc = ORIGIN_TYPE_ICONS[locKey] ?? ORIGIN_TYPE_ICONS.other;
         collected.push({ latlng, iconSrc, locDesc, itemLabel });
       }
     }
@@ -4426,8 +4427,7 @@ function destinationIconSrcForSupplyChainDiagram(dIn) {
   const d = normalizeSupplyChainDiagram(dIn ?? {});
   const k = normalizeSupplyLocationKeyForDiagram(d.destinationCategoryKey);
   if (!k) return ORIGIN_TYPE_ICONS.storage_facility;
-  if (k === "other") return ORIGIN_TYPE_ICONS.distribution_center;
-  return ORIGIN_TYPE_ICONS[k] ?? ORIGIN_TYPE_ICONS.storage_facility;
+  return ORIGIN_TYPE_ICONS[k] ?? ORIGIN_TYPE_ICONS.other;
 }
 
 function collectSupplyChainDiagramFromMount(
@@ -4665,9 +4665,7 @@ function renderSupplyChainDiagramMount(materialIndex, options = {}) {
       parts.push(`<div class="supplyChainDiagram__row supplyChainDiagram__row--b">`);
       parts.push(`<div class="supplyChainDiagram__nodeDot supplyChainDiagram__nodeDot--b" aria-hidden="true">${escapeHtml(bLabel)}</div>`);
       parts.push(`<div class="supplyChainDiagram__fields">`);
-      const stoppingIconSrc = (node.modalChangeKey && node.modalChangeKey !== "other")
-        ? (ORIGIN_TYPE_ICONS[node.modalChangeKey] ?? ORIGIN_TYPE_ICONS.storage_facility)
-        : ORIGIN_TYPE_ICONS.storage_facility;
+      const stoppingIconSrc = ORIGIN_TYPE_ICONS[node.modalChangeKey] ?? ORIGIN_TYPE_ICONS.other;
       parts.push(`<div class="supplyChainDiagram__fieldLabel supplyChainDiagram__fieldLabel--withIcon">`);
       parts.push(`<img class="supplyChainDiagram__icon" src="${escapeHtml(stoppingIconSrc)}" alt="" aria-hidden="true"/>`);
       parts.push(`<span>Stopping Point</span>`);
@@ -5738,18 +5736,18 @@ function updateParticipantSummaryCard() {
 }
 
 function costGradientColor(t) {
-  // rgba(253,238,243) → rgba(255,168,168) → rgba(255,0,0)
+  // rgba(74,204,255) → rgba(255,89,252) → rgba(255,0,0)
   let r, g, b;
   if (t <= 0.5) {
     const s = t * 2;
-    r = Math.round(253 + (255 - 253) * s);
-    g = Math.round(238 + (168 - 238) * s);
-    b = Math.round(243 + (168 - 243) * s);
+    r = Math.round(74  + (255 - 74)  * s);
+    g = Math.round(204 + (89  - 204) * s);
+    b = Math.round(255 + (252 - 255) * s);
   } else {
     const s = (t - 0.5) * 2;
     r = 255;
-    g = Math.round(168 + (0   - 168) * s);
-    b = Math.round(168 + (0   - 168) * s);
+    g = Math.round(89  + (0   - 89)  * s);
+    b = Math.round(252 + (0   - 252) * s);
   }
   return `rgb(${r},${g},${b})`;
 }

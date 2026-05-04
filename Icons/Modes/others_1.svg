@@ -8,14 +8,14 @@
     </style>
   </defs>
   <g>
-    <circle cx="42.65" cy="89.93" r="7.53"/>
-    <circle cx="90.75" cy="89.93" r="7.53"/>
-    <circle cx="138.84" cy="89.93" r="7.53"/>
+    <circle cx="53.84" cy="89.93" r="5.78"/>
+    <circle cx="90.75" cy="89.93" r="5.78"/>
+    <circle cx="127.65" cy="89.93" r="5.78"/>
   </g>
-  <rect x="28.06" y="48.64" width="125.36" height="82.59"/>
+  <rect x="42.65" y="58.25" width="96.19" height="63.37"/>
   <g>
-    <circle class="h" cx="55.67" cy="89.93" r="5.49"/>
-    <circle class="h" cx="90.75" cy="89.93" r="5.49"/>
-    <circle class="h" cx="125.82" cy="89.93" r="5.49"/>
+    <circle class="h" cx="63.83" cy="89.93" r="4.21"/>
+    <circle class="h" cx="90.75" cy="89.93" r="4.21"/>
+    <circle class="h" cx="117.66" cy="89.93" r="4.21"/>
   </g>
 </svg>
