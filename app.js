@@ -1727,6 +1727,7 @@ function addSupplyChainBranchOriginMarkersToLocationsLayer(branches, itemLabels,
       draggable: false
     });
     mk._conductorPointType = "starting";
+    mk._conductorParticipantId = b._participantId ?? viewingParticipantId ?? null;
     mk.bindPopup(
       `${roleLine}<br/>${escapeHtml(itemLabel)}<br/>Where it originates: ${escapeHtml(originDesc)}`
     );
@@ -1823,7 +1824,7 @@ function addAllSupplyChainStoppingPointMarkersToLayer() {
           ? (String(node?.otherDetail ?? "").trim() || "Others")
           : (locOpt?.label ?? locKey ?? "Stopping Point");
         const iconSrc = ORIGIN_TYPE_ICONS[locKey] ?? ORIGIN_TYPE_ICONS.other;
-        collected.push({ latlng, iconSrc, locDesc, itemLabel });
+        collected.push({ latlng, iconSrc, locDesc, itemLabel, participantId: b._participantId ?? viewingParticipantId ?? null });
       }
     }
   }
@@ -1863,6 +1864,8 @@ function addAllSupplyChainStoppingPointMarkersToLayer() {
     const popupLines = group.map((pt) => `${escapeHtml(pt.itemLabel)} — ${escapeHtml(pt.locDesc)}`).join("<br/>");
     const mk = L.marker(latlng, { icon, draggable: false });
     mk._conductorPointType = "stopping";
+    const groupPid = group[0].participantId;
+    mk._conductorParticipantId = group.every((pt) => pt.participantId === groupPid) ? groupPid : null;
     mk.bindPopup(group.length === 1
       ? `Stopping Point<br/>${popupLines}`
       : `Stopping Points<br/>${popupLines}`
@@ -1897,6 +1900,7 @@ function addSupplyChainBranchDestinationMarkersToLayer(branches, itemLabels, kin
     const icon = markerIconForSupplyChainDestinationCategory(d);
     const mk = L.marker(latlng, { icon, draggable: false });
     mk._conductorPointType = "destination";
+    mk._conductorParticipantId = b._participantId ?? viewingParticipantId ?? null;
     mk.bindPopup(
       `${roleLine}<br/>${escapeHtml(itemLabel)}<br/>Destination type: ${escapeHtml(destDesc)}`
     );
@@ -1928,7 +1932,7 @@ function tripFrequencySpeedMultiplier(branch) {
   return count * (FREQ_PERIOD_MULTIPLIER[period] ?? 1);
 }
 
-function startRouteAnimationForRoute(routeLegs, speedMultiplier = 1) {
+function startRouteAnimationForRoute(routeLegs, speedMultiplier = 1, participantId = null) {
   const legs = Array.isArray(routeLegs)
     ? routeLegs.filter((leg) => Array.isArray(leg?.latlngs) && leg.latlngs.length >= 2)
     : [];
@@ -2006,6 +2010,7 @@ function startRouteAnimationForRoute(routeLegs, speedMultiplier = 1) {
     zIndexOffset: 200
   });
   marker._conductorTransportMode = conductorTransportFilterKey(firstMode);
+  marker._conductorParticipantId = participantId;
   marker.addTo(layers.routeAnimations);
   const carMarkers = Array.from({ length: CAR_COUNT }, (_, i) => {
     const car = L.marker(firstLeg.latlngs[0], {
@@ -2019,6 +2024,7 @@ function startRouteAnimationForRoute(routeLegs, speedMultiplier = 1) {
       zIndexOffset: 100 - i * 10
     });
     car._conductorTransportMode = "train";
+    car._conductorParticipantId = participantId;
     car.addTo(layers.routeAnimations);
     applyVisibility(car, firstMode === "train");
     return car;
@@ -2062,17 +2068,21 @@ function startRouteAnimationForRoute(routeLegs, speedMultiplier = 1) {
       marker.setLatLng(map.containerPointToLatLng(pixPos));
       const bearing = (Math.atan2(dirX, -dirY) * 180) / Math.PI;
       const el = marker.getElement();
+      const activeMode = normalizeTransportModeKey(activeLeg.modeKey);
+      const activeFilterKey = conductorTransportFilterKey(activeMode);
+      const modeVisible = SURVEY_MODE !== "conductor" || conductorFeatureFilters.transport.has(activeFilterKey);
+      const iconsVisible = SURVEY_MODE !== "conductor" || conductorTransportIconsVisible;
+      const shouldShow = modeVisible && iconsVisible;
       if (el) {
-        el.style.visibility = "visible";
+        el.style.visibility = shouldShow ? "visible" : "hidden";
         const img = el.querySelector(".routeAnimIcon");
         if (img) img.style.transform = `rotate(${bearing - 90}deg)`;
       }
 
-      const activeMode = normalizeTransportModeKey(activeLeg.modeKey);
       const isTrain = activeMode === "train";
       for (let ci = 0; ci < carMarkers.length; ci++) {
         const car = carMarkers[ci];
-        if (!isTrain) {
+        if (!isTrain || !shouldShow) {
           applyVisibility(car, false);
           continue;
         }
@@ -2106,7 +2116,7 @@ function startRouteAnimationForRoute(routeLegs, speedMultiplier = 1) {
   };
 }
 
-function placeStaticRouteIcon(latlngs, modeKey) {
+function placeStaticRouteIcon(latlngs, modeKey, participantId = null) {
   const normalizedMode = normalizeTransportModeKey(modeKey);
   const iconSrc = ANIMATION_MODE_ICONS[normalizedMode];
   if (!iconSrc || latlngs.length < 2) return;
@@ -2125,15 +2135,18 @@ function placeStaticRouteIcon(latlngs, modeKey) {
     iconSize: [ICON_SIZE, ICON_SIZE],
     iconAnchor: [ICON_SIZE / 2, ICON_SIZE / 2]
   });
-  L.marker(midLatLng, { icon, interactive: false, zIndexOffset: 200 }).addTo(layers.routeAnimations);
+  const mk = L.marker(midLatLng, { icon, interactive: false, zIndexOffset: 200 });
+  mk._conductorTransportMode = conductorTransportFilterKey(normalizedMode);
+  mk._conductorParticipantId = participantId;
+  mk.addTo(layers.routeAnimations);
 }
 
-function placeStaticRouteIconForRoute(routeLegs) {
+function placeStaticRouteIconForRoute(routeLegs, participantId = null) {
   const legs = Array.isArray(routeLegs)
     ? routeLegs.filter((leg) => Array.isArray(leg?.latlngs) && leg.latlngs.length >= 2)
     : [];
   if (!legs.length) return;
-  placeStaticRouteIcon(legs[0].latlngs, legs[0].modeKey);
+  placeStaticRouteIcon(legs[0].latlngs, legs[0].modeKey, participantId);
 }
 
 function createAnimToggleButton() {
@@ -2174,10 +2187,11 @@ function rebuildRouteAnimations() {
         routeLegs.push({ latlngs, modeKey: d.transportLegs[li]?.modeKey ?? "" });
       }
       if (!routeLegs.length) continue;
+      const brPid = br._participantId ?? viewingParticipantId ?? null;
       if (ui.animationsPaused) {
-        placeStaticRouteIconForRoute(routeLegs);
+        placeStaticRouteIconForRoute(routeLegs, brPid);
       } else {
-        const cancel = startRouteAnimationForRoute(routeLegs, tripFrequencySpeedMultiplier(br));
+        const cancel = startRouteAnimationForRoute(routeLegs, tripFrequencySpeedMultiplier(br), brPid);
         if (cancel) routeAnimationHandles.push(cancel);
       }
     }
@@ -2203,6 +2217,7 @@ function rebuildFromState() {
     const marker = L.marker(latlng, { icon, draggable: false });
     marker._conductorPointType = loc.locationType === "workplace" ? "company" : "starting";
     marker._snapLocId = loc.id;
+    marker._conductorParticipantId = loc._participantId ?? viewingParticipantId ?? null;
     const companyNote =
       loc.locationType === "workplace" && state.industry?.companyName
         ? `<br/>${escapeHtml(state.industry.companyName)}`
@@ -5872,6 +5887,18 @@ function initCostViewToggle() {
   });
 }
 
+function initTransportIconsToggle() {
+  if (SURVEY_MODE !== "conductor") return;
+  const btn = document.getElementById("transportIconsToggleBtn");
+  if (!btn) return;
+  btn.classList.add("is-active");
+  btn.addEventListener("click", () => {
+    conductorTransportIconsVisible = !conductorTransportIconsVisible;
+    btn.classList.toggle("is-active", conductorTransportIconsVisible);
+    applyConductorFeatureFilters();
+  });
+}
+
 function updateConductorRouteHighlight() {
   if (!layers?.supplyChainRoutes) return;
   const BASE_WEIGHT = 5;
@@ -5924,9 +5951,9 @@ function applyConductorRouteVisualState() {
       line.setStyle({ opacity: FOCUSED_OPACITY });
       continue;
     }
-    const focused = conductorLineIsFocused(line);
-    line.setStyle({ opacity: focused ? FOCUSED_OPACITY : DIMMED_OPACITY });
-    if (focused && typeof line.bringToFront === "function") focusedLines.push(line);
+    const sameParticipant = line?._conductorParticipantId === viewingParticipantId;
+    line.setStyle({ opacity: sameParticipant ? FOCUSED_OPACITY : DIMMED_OPACITY });
+    if (sameParticipant && typeof line.bringToFront === "function") focusedLines.push(line);
   }
 
   // Ensure focused participant segments are never covered by other lines.
@@ -6560,6 +6587,7 @@ async function bootParticipant() {
 }
 
 let conductorInitialized = false;
+let conductorTransportIconsVisible = true;
 let conductorParticipantsCache = [];
 const conductorSelectedParticipantIds = new Set();
 let conductorSelectionInitialized = false;
@@ -6647,7 +6675,9 @@ function buildMergedConductorPayload(rows) {
   for (const row of rows) {
     const payload = row?.state;
     if (!payload) continue;
-    merged.locations.push(...(cloneJson(payload.locations) ?? []));
+    const locs = cloneJson(payload.locations) ?? [];
+    locs.forEach((l) => { if (l) l._participantId = row.id; });
+    merged.locations.push(...locs);
     const currentSegs = cloneJson(payload.routes?.current?.segments) ?? [];
     currentSegs.forEach((s) => { if (s) s._participantId = row.id; });
     merged.routes.current.segments.push(...currentSegs);
@@ -6838,17 +6868,42 @@ function setupConductorManifestFilters() {
 function applyConductorFeatureFilters() {
   if (SURVEY_MODE !== "conductor" || !layers) return;
   const showPoint = (k) => conductorFeatureFilters.points.has(k);
+  const DIMMED_OPACITY = 0.25;
+
+  const markerParticipantOpacity = (layer) => {
+    if (!viewingParticipantId) return 1;
+    const pid = layer._conductorParticipantId;
+    return !pid || pid === viewingParticipantId ? 1 : DIMMED_OPACITY;
+  };
+
+  const isFocusedMarker = (layer) => {
+    if (!viewingParticipantId) return false;
+    const pid = layer._conductorParticipantId;
+    return !pid || pid === viewingParticipantId;
+  };
 
   const applyMarker = (layer) => {
     const kind = layer?._conductorPointType;
     if (!kind || typeof layer.setOpacity !== "function") return;
-    layer.setOpacity(showPoint(kind) ? 1 : 0);
+    if (!showPoint(kind)) { layer.setOpacity(0); return; }
+    const focused = isFocusedMarker(layer);
+    layer.setOpacity(markerParticipantOpacity(layer));
+    layer.setZIndexOffset?.(focused ? 1000 : 0);
   };
   const applyAnim = (layer) => {
     const mode = layer?._conductorTransportMode;
-    const showTransport = (k) => conductorFeatureFilters.transport.has(k);
     if (!mode || typeof layer.setOpacity !== "function") return;
-    layer.setOpacity(showTransport(mode) ? 1 : 0);
+    const visible = conductorFeatureFilters.transport.has(mode) && conductorTransportIconsVisible;
+    if (!visible) { layer.setOpacity(0); return; }
+    if (viewingParticipantId) {
+      const pid = layer._conductorParticipantId;
+      const focused = !pid || pid === viewingParticipantId;
+      layer.setOpacity(focused ? 1 : 0);
+      layer.setZIndexOffset?.(focused ? 1000 : 0);
+    } else {
+      layer.setOpacity(1);
+      layer.setZIndexOffset?.(0);
+    }
   };
 
   [layers.locations, layers.supplyChainDestinations].forEach((grp) => grp?.eachLayer((layer) => applyMarker(layer)));
@@ -7017,7 +7072,7 @@ async function selectConductorParticipant(id) {
   // already reflect the merged view of all selected participants.
   applySurveyPayload(data.state, { persist: false });
 
-  resetConductorFeatureFilters();
+  applyConductorFeatureFilters();
   uiUpdateStats();
   const viewLbl = document.getElementById("conductorViewingLabel");
   if (viewLbl) viewLbl.textContent = data.label;
@@ -7084,6 +7139,7 @@ async function initConductorSurveyUi() {
   requestAnimationFrame(() => layoutCondCards());
   initConductorLeftPanelOnce();
   initCostViewToggle();
+  initTransportIconsToggle();
   syncConductorParticipantLeftPanel();
   resetConductorFeatureFilters();
   // Map was created after #app became visible; still refresh tile/layout after flex settles.

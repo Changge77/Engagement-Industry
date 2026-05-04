@@ -2045,6 +2045,10 @@ body[data-survey-mode="conductor"] .conductorParticipantMirror .participantAside
   border-color: #3d2a32;
 }
 
+#transportIconsToggleBtn {
+  height: 37.33px;
+}
+
 .costViewLegend {
   margin-top: 6px;
 }
