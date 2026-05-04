@@ -760,6 +760,7 @@ function updateSupplyChainRoutePreview() {
 function resetSupplyChainRouteDraft() {
   removeSupplyChainRoutePreviewPolyline();
   if (layers?.supplyChainDraft) layers.supplyChainDraft.clearLayers();
+  document.getElementById("participantRouteConfirmOverlay")?.classList.add("is-hidden");
   ui.scRouteDrawing = null;
   syncParticipantLeftPanel();
   updateParticipantSupplyChainRouteEditingUI();
@@ -861,34 +862,17 @@ function refreshSupplyChainRouteDraftVisuals() {
     );
   }
   const labelText = supplyChainRouteConfirmLabel(d, dr.legIndex);
-  if (dr.points.length >= 2) {
-    const end = dr.points[dr.points.length - 1];
-    const icon = L.divIcon({
-      className: "supplyChainRouteConfirmWrap",
-      html: `<div class="supplyChainRouteConfirmStack"><div class="supplyChainRouteConfirm"><span class="supplyChainRouteConfirm__text">${escapeHtml(
-        labelText
-      )}</span><button type="button" class="supplyChainRouteConfirm__btn" data-sc-route-confirm title="Confirm this stop">√</button></div><div class="supplyChainRouteUndoRow"><button type="button" class="supplyChainRouteUndoRow__btn" data-sc-route-undo-last title="Remove last point">−</button><span class="supplyChainRouteUndoRow__label">Remove Last Point</span></div></div>`,
-      iconSize: [300, 136],
-      iconAnchor: [150, 136]
-    });
-    const mk = L.marker(end, { icon, zIndexOffset: 700 });
-    mk.addTo(layers.supplyChainDraft);
-    requestAnimationFrame(() => {
-      const el = mk.getElement();
-      const undoBtn = el?.querySelector("[data-sc-route-undo-last]");
-      undoBtn?.addEventListener("click", (e) => {
-        L.DomEvent.stopPropagation(e);
-        L.DomEvent.preventDefault(e);
-        popLastSupplyChainRoutePoint();
-      });
-      const btn = el?.querySelector("[data-sc-route-confirm]");
-      btn?.addEventListener("click", (e) => {
-        L.DomEvent.stopPropagation(e);
-        L.DomEvent.preventDefault(e);
-        finishSupplyChainTransportRouteLegAndContinue();
-      });
-      mk.on("click", (e) => L.DomEvent.stopPropagation(e));
-    });
+  const confirmOverlay = document.getElementById("participantRouteConfirmOverlay");
+  if (confirmOverlay) confirmOverlay.classList.add("is-hidden");
+  if (dr.points.length >= 2 && confirmOverlay) {
+    confirmOverlay.innerHTML = `<div class="supplyChainRouteConfirmStack"><div class="supplyChainRouteConfirm"><span class="supplyChainRouteConfirm__text">${escapeHtml(labelText)}</span><button type="button" class="supplyChainRouteConfirm__btn" data-sc-route-confirm title="Confirm this stop">✓</button></div><div class="supplyChainRouteUndoRow"><button type="button" class="supplyChainRouteUndoRow__btn" data-sc-route-undo-last title="Remove last point">−</button><span class="supplyChainRouteUndoRow__label">Remove Last Point</span></div></div>`;
+    const banner = document.getElementById("participantSupplyChainRouteBanner");
+    if (banner) {
+      confirmOverlay.style.top = `${banner.offsetTop + banner.offsetHeight + 8}px`;
+    }
+    confirmOverlay.classList.remove("is-hidden");
+    confirmOverlay.querySelector("[data-sc-route-undo-last]")?.addEventListener("click", () => popLastSupplyChainRoutePoint());
+    confirmOverlay.querySelector("[data-sc-route-confirm]")?.addEventListener("click", () => finishSupplyChainTransportRouteLegAndContinue());
   }
   updateSupplyChainRoutePreview();
 }

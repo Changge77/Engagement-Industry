@@ -474,6 +474,22 @@ body[data-survey-mode="participant"] .participantProfileCard {
   border-color: rgba(20, 184, 166, 0.42);
 }
 
+.participantRouteConfirmOverlay {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 420;
+  pointer-events: auto;
+  width: max-content;
+  max-width: min(300px, 90vw);
+  display: flex;
+  justify-content: center;
+}
+
+.participantRouteConfirmOverlay.is-hidden {
+  display: none;
+}
+
 /* Participant: “Currently Editing” banner while drawing a supply-chain leg on the map */
 .supplyChainRouteEditBanner {
   position: absolute;
