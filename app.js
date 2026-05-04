@@ -1928,42 +1928,18 @@ function tripFrequencySpeedMultiplier(branch) {
   return count * (FREQ_PERIOD_MULTIPLIER[period] ?? 1);
 }
 
-function startRouteAnimationForLeg(latlngs, modeKey, speedMultiplier = 1) {
-  const normalizedMode = normalizeTransportModeKey(modeKey);
-  const conductorModeKey = conductorTransportFilterKey(normalizedMode);
-  const frontSrc = ANIMATION_MODE_ICONS[normalizedMode];
-  if (!frontSrc || latlngs.length < 2) return null;
+function startRouteAnimationForRoute(routeLegs, speedMultiplier = 1) {
+  const legs = Array.isArray(routeLegs)
+    ? routeLegs.filter((leg) => Array.isArray(leg?.latlngs) && leg.latlngs.length >= 2)
+    : [];
+  if (!legs.length) return null;
 
   const ICON_SIZE = 56;
   const PIXELS_PER_SEC = 60 * speedMultiplier;
-  const isTrain = normalizedMode === "train";
   const CAR_COUNT = 3;
   const CAR_SPACING = ICON_SIZE * 0.5;
 
-  function makeMarker(src, zOffset) {
-    const icon = L.divIcon({
-      className: "",
-      html: `<img class="routeAnimIcon" src="${escapeHtml(src)}" alt="" aria-hidden="true">`,
-      iconSize: [ICON_SIZE, ICON_SIZE],
-      iconAnchor: [ICON_SIZE / 2, ICON_SIZE / 2]
-    });
-    const m = L.marker(latlngs[0], { icon, interactive: false, zIndexOffset: zOffset });
-    m._conductorTransportMode = conductorModeKey;
-    m.addTo(layers.routeAnimations);
-    return m;
-  }
-
-  // Add cars first (lower z) so the front renders on top
-  const carMarkers = isTrain
-    ? Array.from({ length: CAR_COUNT }, (_, i) => makeMarker("Icons/Modes/Train_car.svg", 100 - i * 10))
-    : [];
-  const frontMarker = makeMarker(frontSrc, 200);
-
-  let pixelsElapsed = 0;
-  let lastTime = null;
-  let rafId;
-
-  function buildPixelRoute() {
+  function buildPixelRoute(latlngs) {
     const pixelPts = latlngs.map((ll) => map.latLngToContainerPoint(ll));
     let totalPixels = 0;
     const segLens = [];
@@ -1979,7 +1955,8 @@ function startRouteAnimationForLeg(latlngs, modeKey, speedMultiplier = 1) {
   function positionAt(pixelPts, segLens, px) {
     let remaining = Math.max(0, px);
     let pixPos = pixelPts[pixelPts.length - 1];
-    let dirX = 0, dirY = 1;
+    let dirX = 0;
+    let dirY = 1;
     for (let i = 0; i < segLens.length; i++) {
       if (remaining <= segLens[i] || i === segLens.length - 1) {
         const t = segLens[i] > 0 ? remaining / segLens[i] : 0;
@@ -1996,37 +1973,123 @@ function startRouteAnimationForLeg(latlngs, modeKey, speedMultiplier = 1) {
     return { pixPos, dirX, dirY };
   }
 
-  function applyToMarker(marker, pixelPts, segLens, px) {
-    const { pixPos, dirX, dirY } = positionAt(pixelPts, segLens, px);
-    marker.setLatLng(map.containerPointToLatLng(pixPos));
-    const bearing = (Math.atan2(dirX, -dirY) * 180) / Math.PI;
-    const el = marker.getElement();
-    if (el) {
-      const img = el.querySelector(".routeAnimIcon");
-      if (img) img.style.transform = `rotate(${bearing - 90}deg)`;
-    }
+  function updateMarkerVisual(marker, modeKey, conductorModeKey) {
+    const normalizedMode = normalizeTransportModeKey(modeKey);
+    const src = ANIMATION_MODE_ICONS[normalizedMode];
+    const icon = L.divIcon({
+      className: "",
+      html: `<img class="routeAnimIcon" src="${escapeHtml(src)}" alt="" aria-hidden="true">`,
+      iconSize: [ICON_SIZE, ICON_SIZE],
+      iconAnchor: [ICON_SIZE / 2, ICON_SIZE / 2]
+    });
+    marker.setIcon(icon);
+    marker._conductorTransportMode = conductorModeKey;
   }
+
+  function applyVisibility(marker, visible) {
+    const el = marker?.getElement?.();
+    if (el) el.style.visibility = visible ? "visible" : "hidden";
+  }
+
+  const firstLeg = legs[0];
+  const firstMode = normalizeTransportModeKey(firstLeg.modeKey);
+  const firstIcon = ANIMATION_MODE_ICONS[firstMode];
+  if (!firstIcon) return null;
+  const marker = L.marker(firstLeg.latlngs[0], {
+    icon: L.divIcon({
+      className: "",
+      html: `<img class="routeAnimIcon" src="${escapeHtml(firstIcon)}" alt="" aria-hidden="true">`,
+      iconSize: [ICON_SIZE, ICON_SIZE],
+      iconAnchor: [ICON_SIZE / 2, ICON_SIZE / 2]
+    }),
+    interactive: false,
+    zIndexOffset: 200
+  });
+  marker._conductorTransportMode = conductorTransportFilterKey(firstMode);
+  marker.addTo(layers.routeAnimations);
+  const carMarkers = Array.from({ length: CAR_COUNT }, (_, i) => {
+    const car = L.marker(firstLeg.latlngs[0], {
+      icon: L.divIcon({
+        className: "",
+        html: `<img class="routeAnimIcon" src="Icons/Modes/Train_car.svg" alt="" aria-hidden="true">`,
+        iconSize: [ICON_SIZE, ICON_SIZE],
+        iconAnchor: [ICON_SIZE / 2, ICON_SIZE / 2]
+      }),
+      interactive: false,
+      zIndexOffset: 100 - i * 10
+    });
+    car._conductorTransportMode = "train";
+    car.addTo(layers.routeAnimations);
+    applyVisibility(car, firstMode === "train");
+    return car;
+  });
+
+  let legIndex = 0;
+  let pixelsElapsed = 0;
+  let lastTime = null;
+  let rafId = null;
 
   function step(ts) {
     if (lastTime === null) lastTime = ts;
     const dt = ts - lastTime;
     lastTime = ts;
 
-    const { pixelPts, segLens, totalPixels } = buildPixelRoute();
-    if (totalPixels < 1) { rafId = requestAnimationFrame(step); return; }
+    const leg = legs[legIndex];
+    const { pixelPts, segLens, totalPixels } = buildPixelRoute(leg.latlngs);
+    if (totalPixels < 1) {
+      rafId = requestAnimationFrame(step);
+      return;
+    }
 
-    pixelsElapsed = (pixelsElapsed + (PIXELS_PER_SEC * dt) / 1000) % totalPixels;
+    pixelsElapsed += (PIXELS_PER_SEC * dt) / 1000;
+    if (pixelsElapsed >= totalPixels) {
+      const el = marker.getElement();
+      if (el) el.style.visibility = "hidden";
 
-    applyToMarker(frontMarker, pixelPts, segLens, pixelsElapsed);
+      legIndex = (legIndex + 1) % legs.length;
+      pixelsElapsed = 0;
 
-    for (let ci = 0; ci < carMarkers.length; ci++) {
-      const carPx = pixelsElapsed - (ci + 1) * CAR_SPACING;
-      const el = carMarkers[ci].getElement();
-      if (carPx < 0) {
-        if (el) el.style.visibility = "hidden";
-      } else {
-        if (el) el.style.visibility = "visible";
-        applyToMarker(carMarkers[ci], pixelPts, segLens, carPx);
+      const nextLeg = legs[legIndex];
+      const nextMode = normalizeTransportModeKey(nextLeg.modeKey);
+      updateMarkerVisual(marker, nextMode, conductorTransportFilterKey(nextMode));
+      marker.setLatLng(nextLeg.latlngs[0]);
+    }
+
+    const activeLeg = legs[legIndex];
+    const activePixels = buildPixelRoute(activeLeg.latlngs);
+    if (activePixels.totalPixels >= 1) {
+      const { pixPos, dirX, dirY } = positionAt(activePixels.pixelPts, activePixels.segLens, pixelsElapsed);
+      marker.setLatLng(map.containerPointToLatLng(pixPos));
+      const bearing = (Math.atan2(dirX, -dirY) * 180) / Math.PI;
+      const el = marker.getElement();
+      if (el) {
+        el.style.visibility = "visible";
+        const img = el.querySelector(".routeAnimIcon");
+        if (img) img.style.transform = `rotate(${bearing - 90}deg)`;
+      }
+
+      const activeMode = normalizeTransportModeKey(activeLeg.modeKey);
+      const isTrain = activeMode === "train";
+      for (let ci = 0; ci < carMarkers.length; ci++) {
+        const car = carMarkers[ci];
+        if (!isTrain) {
+          applyVisibility(car, false);
+          continue;
+        }
+        const carPx = pixelsElapsed - (ci + 1) * CAR_SPACING;
+        if (carPx < 0) {
+          applyVisibility(car, false);
+          continue;
+        }
+        const carPos = positionAt(activePixels.pixelPts, activePixels.segLens, carPx);
+        car.setLatLng(map.containerPointToLatLng(carPos.pixPos));
+        const carBearing = (Math.atan2(carPos.dirX, -carPos.dirY) * 180) / Math.PI;
+        const carEl = car.getElement();
+        if (carEl) {
+          carEl.style.visibility = "visible";
+          const carImg = carEl.querySelector(".routeAnimIcon");
+          if (carImg) carImg.style.transform = `rotate(${carBearing - 90}deg)`;
+        }
       }
     }
 
@@ -2035,10 +2098,10 @@ function startRouteAnimationForLeg(latlngs, modeKey, speedMultiplier = 1) {
 
   rafId = requestAnimationFrame(step);
   return () => {
-    cancelAnimationFrame(rafId);
+    if (rafId != null) cancelAnimationFrame(rafId);
     if (layers?.routeAnimations) {
-      layers.routeAnimations.removeLayer(frontMarker);
-      carMarkers.forEach((m) => layers.routeAnimations.removeLayer(m));
+      layers.routeAnimations.removeLayer(marker);
+      carMarkers.forEach((car) => layers.routeAnimations.removeLayer(car));
     }
   };
 }
@@ -2063,6 +2126,14 @@ function placeStaticRouteIcon(latlngs, modeKey) {
     iconAnchor: [ICON_SIZE / 2, ICON_SIZE / 2]
   });
   L.marker(midLatLng, { icon, interactive: false, zIndexOffset: 200 }).addTo(layers.routeAnimations);
+}
+
+function placeStaticRouteIconForRoute(routeLegs) {
+  const legs = Array.isArray(routeLegs)
+    ? routeLegs.filter((leg) => Array.isArray(leg?.latlngs) && leg.latlngs.length >= 2)
+    : [];
+  if (!legs.length) return;
+  placeStaticRouteIcon(legs[0].latlngs, legs[0].modeKey);
 }
 
 function createAnimToggleButton() {
@@ -2094,18 +2165,20 @@ function rebuildRouteAnimations() {
       if (!br || br.originCategoryKey === RAW_MATERIAL_ORIGIN_SKIPPED_KEY) continue;
       const d = normalizeSupplyChainDiagram(br.supplyChainDiagram ?? defaultSupplyChainDiagram());
       const routes = normalizeSupplyChainTransportRoutesForBranch(br.supplyChainTransportRoutes, d);
+      const routeLegs = [];
       for (let li = 0; li < routes.length; li++) {
         const pts = routes[li]?.points;
         if (!Array.isArray(pts) || pts.length < 2) continue;
         const latlngs = surveyPointsToLatLngs(pts);
         if (latlngs.length < 2) continue;
-        const modeKey = d.transportLegs[li]?.modeKey ?? "";
-        if (ui.animationsPaused) {
-          placeStaticRouteIcon(latlngs, modeKey);
-        } else {
-          const cancel = startRouteAnimationForLeg(latlngs, modeKey, tripFrequencySpeedMultiplier(br));
-          if (cancel) routeAnimationHandles.push(cancel);
-        }
+        routeLegs.push({ latlngs, modeKey: d.transportLegs[li]?.modeKey ?? "" });
+      }
+      if (!routeLegs.length) continue;
+      if (ui.animationsPaused) {
+        placeStaticRouteIconForRoute(routeLegs);
+      } else {
+        const cancel = startRouteAnimationForRoute(routeLegs, tripFrequencySpeedMultiplier(br));
+        if (cancel) routeAnimationHandles.push(cancel);
       }
     }
   }
