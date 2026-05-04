@@ -5835,6 +5835,45 @@ function updateConductorRouteHighlight() {
     }
     line.setStyle({ weight: highlight ? BASE_WEIGHT * 2 : BASE_WEIGHT });
   });
+  applyConductorRouteVisualState();
+}
+
+function conductorLineIsFocused(line) {
+  const pid = viewingParticipantId;
+  if (!pid) return false;
+  if (line?._conductorParticipantId !== pid) return false;
+  if (!conductorBranchHighlightActive) return true;
+  const lineIdx = line?._conductorLocalBranchIndex ?? line?._conductorBranchIndex;
+  return line?._conductorBranchKind === ui.participantLeftPanelKind && lineIdx === ui.participantLeftPanelIndex;
+}
+
+function applyConductorRouteVisualState() {
+  if (SURVEY_MODE !== "conductor" || !layers) return;
+  const showTransport = (k) => conductorFeatureFilters.transport.has(k);
+  const FOCUSED_OPACITY = 0.95;
+  const DIMMED_OPACITY = 0.38; // 60% transparent from the normal route opacity baseline
+  const HIDDEN_OPACITY = 0.02;
+
+  const focusedLines = [];
+  for (const line of allRouteLayers()) {
+    const mode = line?._conductorTransportMode;
+    if (!mode || typeof line.setStyle !== "function") continue;
+    const visibleByFilter = showTransport(mode);
+    if (!visibleByFilter) {
+      line.setStyle({ opacity: HIDDEN_OPACITY });
+      continue;
+    }
+    if (!viewingParticipantId) {
+      line.setStyle({ opacity: FOCUSED_OPACITY });
+      continue;
+    }
+    const focused = conductorLineIsFocused(line);
+    line.setStyle({ opacity: focused ? FOCUSED_OPACITY : DIMMED_OPACITY });
+    if (focused && typeof line.bringToFront === "function") focusedLines.push(line);
+  }
+
+  // Ensure focused participant segments are never covered by other lines.
+  for (const line of focusedLines) line.bringToFront();
 }
 
 async function onConductorRouteClick(line) {
@@ -6742,28 +6781,21 @@ function setupConductorManifestFilters() {
 function applyConductorFeatureFilters() {
   if (SURVEY_MODE !== "conductor" || !layers) return;
   const showPoint = (k) => conductorFeatureFilters.points.has(k);
-  const showTransport = (k) => conductorFeatureFilters.transport.has(k);
 
   const applyMarker = (layer) => {
     const kind = layer?._conductorPointType;
     if (!kind || typeof layer.setOpacity !== "function") return;
     layer.setOpacity(showPoint(kind) ? 1 : 0);
   };
-  const applyLine = (layer) => {
-    const mode = layer?._conductorTransportMode;
-    if (!mode || typeof layer.setStyle !== "function") return;
-    layer.setStyle({ opacity: showTransport(mode) ? 0.95 : 0.02 });
-  };
   const applyAnim = (layer) => {
     const mode = layer?._conductorTransportMode;
+    const showTransport = (k) => conductorFeatureFilters.transport.has(k);
     if (!mode || typeof layer.setOpacity !== "function") return;
     layer.setOpacity(showTransport(mode) ? 1 : 0);
   };
 
   [layers.locations, layers.supplyChainDestinations].forEach((grp) => grp?.eachLayer((layer) => applyMarker(layer)));
-  [layers.currentRoutes, layers.ibxRoutes, layers.supplyChainRoutes].forEach((grp) =>
-    grp?.eachLayer((layer) => applyLine(layer))
-  );
+  applyConductorRouteVisualState();
   layers.routeAnimations?.eachLayer((layer) => applyAnim(layer));
 }
 
