@@ -2313,6 +2313,14 @@ body[data-survey-mode="conductor"] #app {
   overflow: hidden;
 }
 
+body[data-survey-mode="participant"] #app.conductorWorkspace {
+  height: 100vh;
+  display: flex;
+  flex-direction: row;
+  overflow: hidden;
+  min-height: 0;
+}
+
 /* Filter bar — always open, top of right area */
 .conductorFilterBar {
   flex-shrink: 0;
@@ -2370,7 +2378,8 @@ body[data-survey-mode="conductor"] #app {
   border: none;
 }
 
-body[data-survey-mode="conductor"] #map {
+body[data-survey-mode="conductor"] #map,
+body[data-survey-mode="participant"] .conductorMapArea #map {
   min-height: 0;
   height: 100%;
 }
@@ -2527,6 +2536,19 @@ body[data-survey-mode="conductor"] #map {
 .condCard__statLabel {
   font-size: 12px;
   color: var(--muted);
+}
+
+.condCard__statLabel--icon {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.condCard__statIcon {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  opacity: 0.75;
 }
 
 .condCard__statValue {

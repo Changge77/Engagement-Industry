@@ -3,12 +3,10 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Urban Supply Chain Survey (NYC)</title>
-    <link
-      rel="stylesheet"
-      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-    />
+    <title>NYC Supply Chain Survey</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link rel="stylesheet" href="./styles.css" />
+    <link rel="icon" href="data:," />
     <script>
       (function () {
         try {
@@ -24,6 +22,8 @@
     </script>
   </head>
   <body data-survey-mode="participant">
+
+    <!-- ══ AUTH GATE ══════════════════════════════════════════════ -->
     <div id="participantGate" class="participantGate" role="dialog" aria-live="polite">
       <div class="participantGate__card">
         <h1 class="participantGate__h1">Survey link required</h1>
@@ -34,6 +34,7 @@
       </div>
     </div>
 
+    <!-- ══ WELCOME GATE ═══════════════════════════════════════════ -->
     <div id="welcomeGate" class="participantGate" role="dialog" aria-live="polite">
       <div class="participantGate__card welcomeGate__card">
         <h1 class="participantGate__h1">Welcome and thank you to participate in our survey!</h1>
@@ -48,495 +49,335 @@
       </div>
     </div>
 
-    <div id="app">
-      <header class="topbar">
-        <div class="topbar__title">NYC Supply Chain Survey</div>
-      </header>
+    <!-- ══ MAIN APP ════════════════════════════════════════════════ -->
+    <div id="app" class="conductorWorkspace">
 
-      <main class="layout">
-        <aside class="panel">
-          <div id="participantProfileCard" class="participantProfileCard is-hidden" aria-label="Your profile answers">
-            <div class="participantProfileRow participantProfileRow--products">
-              <div class="participantProfileProductsHeader">
-                <span class="participantProfileRow__label participantProfileRow__label--inline">Company</span>
-                <div class="participantProfileHeaderActions">
-                  <button
-                    type="button"
-                    class="ghostBtn participantProfileProductsEditBtn"
-                    id="participantProfileCompanyBtn"
-                    aria-label="Edit company or industry"
-                  >
-                    Edit
-                  </button>
-                  <button
-                    type="button"
-                    class="ghostBtn participantProfileProductsEditBtn participantProfileRedrawLocBtn"
-                    id="participantProfileRedrawWorkplaceBtn"
-                    aria-label="Redraw company location on the map"
-                  >
-                    Redraw Location
-                  </button>
+      <!-- ══ LEFT SIDEBAR ══════════════════════════════════════════ -->
+      <div class="conductorSidebar">
+
+        <!-- Brand -->
+        <div class="conductorSidebar__brand">
+          <img src="Icons/Logo/Logo.svg" alt="Manifest" class="conductorSidebar__logo" />
+        </div>
+
+        <!-- ── Stacked cards ──────────────────────────────────── -->
+        <div class="conductorCards">
+
+          <!-- Card: Participant (z=4) -->
+          <div class="condCard condCard--participant" id="condCard_participant">
+            <div class="condCard__peek">
+              <span class="condCard__title">Participant</span>
+              <div class="condCard__infoTable">
+                <div class="condCard__infoCol">
+                  <span class="condCard__infoLabel">Company</span>
+                  <span id="condCardSummaryCompany" class="condCard__infoValue">—</span>
                 </div>
-              </div>
-              <ul id="participantProfileCompanyList" class="participantProfileProductList is-hidden" aria-label="Company name"></ul>
-              <p id="participantProfileCompanyEmpty" class="participantProfileProductsEmpty">—</p>
-            </div>
-            <div class="participantProfileRow participantProfileRow--products">
-              <div class="participantProfileProductsHeader">
-                <span class="participantProfileRow__label participantProfileRow__label--inline">Job &amp; Role</span>
-                <button
-                  type="button"
-                  class="ghostBtn participantProfileProductsEditBtn"
-                  id="participantProfileRoleBtn"
-                  aria-label="Edit job and role"
-                >
-                  Edit
-                </button>
-              </div>
-              <ul id="participantProfileRoleList" class="participantProfileProductList is-hidden" aria-label="Job and role"></ul>
-              <p id="participantProfileRoleEmpty" class="participantProfileProductsEmpty">—</p>
-            </div>
-            <div class="participantProfileRow participantProfileRow--products">
-              <div class="participantProfileProductsHeader">
-                <span class="participantProfileRow__label participantProfileRow__label--inline">Type of Products</span>
-                <button
-                  type="button"
-                  class="ghostBtn participantProfileProductsEditBtn"
-                  id="participantProfileProductsBtn"
-                  aria-label="Edit type of products"
-                >
-                  Edit
-                </button>
-              </div>
-              <ul id="participantProfileProductsList" class="participantProfileProductList is-hidden" aria-label="Selected product types"></ul>
-              <p id="participantProfileProductsEmpty" class="participantProfileProductsEmpty">—</p>
-            </div>
-          </div>
-          <div class="participantAsideContent">
-            <div id="participantLeftEmpty" class="participantLeftEmpty" aria-hidden="true"></div>
-
-            <div id="participantLeftShell" class="participantLeftShell is-hidden">
-              <div class="participantLeftSection">
-                <h3 class="participantLeftSection__h">Raw Materials</h3>
-                <div id="participantRawMaterialPills" class="participantPillRow" role="tablist" aria-label="Raw materials"></div>
-              </div>
-              <div class="participantLeftSection">
-                <h3 class="participantLeftSection__h">Products</h3>
-                <div
-                  id="participantProductPills"
-                  class="participantPillRow participantPillRow--products"
-                  role="tablist"
-                  aria-label="Products"
-                ></div>
-              </div>
-              <div id="participantLeftDetail" class="participantLeftDetail is-hidden">
-                <h3 class="participantLeftDetail__h">
-                  <span class="participantLeftDetail__label">Detail:</span>
-                  <span id="participantLeftDetailName" class="participantLeftDetail__name"></span>
-                </h3>
-                <p id="participantLeftDetailPlaceholder" class="participantLeftDetailPlaceholder is-hidden"></p>
-                <div
-                  id="participantLeftDiagramMount"
-                  class="supplyChainDiagramMount supplyChainDiagramMount--left"
-                ></div>
-                <div id="participantDiagramSaveRow" class="participantDiagramSaveRow is-hidden">
-                  <button type="button" class="primaryBtn" id="participantLeftDiagramSaveBtn">
-                    Confirm &amp; Save
-                  </button>
+                <div class="condCard__infoCol">
+                  <span class="condCard__infoLabel">Role</span>
+                  <span id="condCardSummaryRole" class="condCard__infoValue">—</span>
+                </div>
+                <div class="condCard__infoCol">
+                  <span class="condCard__infoLabel">Products</span>
+                  <span id="condCardSummaryProducts" class="condCard__infoValue">—</span>
                 </div>
               </div>
             </div>
-          </div>
-        </aside>
-
-        <section class="mapWrap">
-          <div
-            id="participantCompanyBanner"
-            class="mapCompanyHint is-hidden"
-            aria-hidden="true"
-          >
-            Please Mark Your Company Location
-          </div>
-
-          <div
-            id="participantRawMaterialOriginBanner"
-            class="mapCompanyHint mapCompanyHint--rawOrigin is-hidden"
-            aria-hidden="true"
-          ></div>
-
-          <div
-            id="participantSupplyChainRouteBanner"
-            class="supplyChainRouteEditBanner is-hidden"
-            aria-hidden="true"
-            role="status"
-          >
-            <div class="supplyChainRouteEditBanner__inner">
-              <span class="supplyChainRouteEditBanner__title">Currently Editing:</span>
-              <div class="supplyChainRouteEditBanner__diagram">
-                <span class="supplyChainRouteEditBanner__node" data-sc-route-banner-from>A</span>
-                <span class="supplyChainRouteEditBanner__leg">
-                  <span class="supplyChainRouteEditBanner__mode" data-sc-route-banner-mode>—</span>
-                  <span class="supplyChainRouteEditBanner__arrowLine" aria-hidden="true"></span>
-                </span>
-                <span class="supplyChainRouteEditBanner__node" data-sc-route-banner-to>B</span>
+            <div class="condCard__body" id="condCardBody_participant">
+              <!-- Profile card — editable, same IDs as original sub.html -->
+              <div id="participantProfileCard" class="participantProfileCard" aria-label="Your profile answers">
+                <div class="participantProfileRow participantProfileRow--products">
+                  <div class="participantProfileProductsHeader">
+                    <span class="participantProfileRow__label participantProfileRow__label--inline">Company</span>
+                    <div class="participantProfileHeaderActions">
+                      <button type="button" class="ghostBtn participantProfileProductsEditBtn" id="participantProfileCompanyBtn" aria-label="Edit company or industry">Edit</button>
+                      <button type="button" class="ghostBtn participantProfileProductsEditBtn participantProfileRedrawLocBtn" id="participantProfileRedrawWorkplaceBtn" aria-label="Redraw company location on the map">Redraw Location</button>
+                    </div>
+                  </div>
+                  <ul id="participantProfileCompanyList" class="participantProfileProductList is-hidden" aria-label="Company name"></ul>
+                  <p id="participantProfileCompanyEmpty" class="participantProfileProductsEmpty">—</p>
+                </div>
+                <div class="participantProfileRow participantProfileRow--products">
+                  <div class="participantProfileProductsHeader">
+                    <span class="participantProfileRow__label participantProfileRow__label--inline">Job &amp; Role</span>
+                    <button type="button" class="ghostBtn participantProfileProductsEditBtn" id="participantProfileRoleBtn" aria-label="Edit job and role">Edit</button>
+                  </div>
+                  <ul id="participantProfileRoleList" class="participantProfileProductList is-hidden" aria-label="Job and role"></ul>
+                  <p id="participantProfileRoleEmpty" class="participantProfileProductsEmpty">—</p>
+                </div>
+                <div class="participantProfileRow participantProfileRow--products">
+                  <div class="participantProfileProductsHeader">
+                    <span class="participantProfileRow__label participantProfileRow__label--inline">Type of Products</span>
+                    <button type="button" class="ghostBtn participantProfileProductsEditBtn" id="participantProfileProductsBtn" aria-label="Edit type of products">Edit</button>
+                  </div>
+                  <ul id="participantProfileProductsList" class="participantProfileProductList is-hidden" aria-label="Selected product types"></ul>
+                  <p id="participantProfileProductsEmpty" class="participantProfileProductsEmpty">—</p>
+                </div>
               </div>
             </div>
-          </div>
+          </div><!-- /.condCard--participant -->
 
-          <div
-            id="participantSupplyChainRouteCursorHint"
-            class="supplyChainRouteCursorHint is-hidden"
-            aria-hidden="true"
-          >
-            Please Mark the Route
-          </div>
+          <!-- Card: Raw Materials (z=5) -->
+          <div class="condCard condCard--raw" id="condCard_raw">
+            <div class="condCard__peek">
+              <span class="condCard__title">Raw Materials</span>
+              <div id="participantRawMaterialPills" class="condCard__pills participantPillRow" role="tablist" aria-label="Raw materials"></div>
+            </div>
+            <div class="condCard__body" id="condCardBody_raw">
+              <!-- participantLeftShell: JS uses this for show/hide guard -->
+              <div id="participantLeftShell">
+                <div id="participantLeftEmpty" class="condCard__emptyMsg" aria-hidden="true"></div>
+                <div id="participantLeftDetail" class="is-hidden">
+                  <p id="participantLeftDetailPlaceholder" class="condCard__emptyMsg is-hidden"></p>
+                  <!-- participantLeftDetailName: set by JS, not shown visually (active pill serves this role) -->
+                  <span id="participantLeftDetailName" class="is-hidden"></span>
+                  <div id="participantLeftDiagramMount" class="supplyChainDiagramMount supplyChainDiagramMount--left"></div>
+                  <div id="participantDiagramSaveRow" class="participantDiagramSaveRow is-hidden">
+                    <button type="button" class="primaryBtn" id="participantLeftDiagramSaveBtn">Confirm &amp; Save</button>
+                  </div>
+                </div>
+              </div>
+              <div id="participantRawDistanceSummary" class="condCard__costBreakdown"></div>
+            </div>
+          </div><!-- /.condCard--raw -->
 
-          <div
-            id="industryGate"
-            class="industryGate industryGate--floating"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="industryGateTitle"
-          >
-            <div class="participantGate__card industryGate__card">
-              <h2 class="industryGate__title" id="industryGateTitle">What industry company do you work in?</h2>
-              <p class="participantGate__p industryGate__intro">
-                Please type the name of industry company you work in.<br />
-                Next, please mark the company’s location on the map.
-              </p>
-              <label class="industryGate__label" for="industryCompanyInput">Your answer</label>
-              <input
-                id="industryCompanyInput"
-                class="industryGate__input"
-                type="text"
-                maxlength="500"
-                autocomplete="organization"
-                placeholder="e.g. ABC Logistics, food manufacturing, etc."
-              />
-              <div class="participantGate__actions">
-                <button class="primaryBtn" id="industryContinueBtn" type="button">Continue to map</button>
+          <!-- Card: Products (z=6) -->
+          <div class="condCard condCard--product" id="condCard_product">
+            <div class="condCard__peek">
+              <span class="condCard__title">Products</span>
+              <div id="participantProductPills" class="condCard__pills participantPillRow participantPillRow--products" role="tablist" aria-label="Products"></div>
+            </div>
+            <div class="condCard__body" id="condCardBody_product">
+              <div id="participantProductDetail" class="is-hidden">
+                <p id="participantProductDetailPlaceholder" class="condCard__emptyMsg is-hidden"></p>
+                <div id="participantProductDiagramMount" class="supplyChainDiagramMount supplyChainDiagramMount--left"></div>
+                <div id="participantProductDiagramSaveRow" class="participantDiagramSaveRow is-hidden">
+                  <button type="button" class="primaryBtn" id="participantProductDiagramSaveBtn">Confirm &amp; Save</button>
+                </div>
+              </div>
+              <div id="participantProductDistanceSummary" class="condCard__costBreakdown"></div>
+            </div>
+          </div><!-- /.condCard--product -->
+
+          <!-- Card: Summary (z=7) -->
+          <div class="condCard condCard--summary" id="condCard_summary">
+            <div class="condCard__peek">
+              <span class="condCard__title">Summary</span>
+              <span id="participantSummaryPreview" class="condCard__previewText"></span>
+            </div>
+            <div class="condCard__body" id="condCardBody_summary">
+              <div id="participantSummaryStats" class="condCard__stats"></div>
+            </div>
+          </div><!-- /.condCard--summary -->
+
+        </div><!-- /.conductorCards -->
+      </div><!-- /.conductorSidebar -->
+
+      <!-- ══ RIGHT MAIN AREA ════════════════════════════════════ -->
+      <div class="conductorMain">
+        <main class="conductorMapArea">
+          <section class="mapWrap">
+
+            <!-- Map overlays / banners -->
+            <div id="participantCompanyBanner" class="mapCompanyHint is-hidden" aria-hidden="true">
+              Please Mark Your Company Location
+            </div>
+            <div id="participantRawMaterialOriginBanner" class="mapCompanyHint mapCompanyHint--rawOrigin is-hidden" aria-hidden="true"></div>
+            <div id="participantSupplyChainRouteBanner" class="supplyChainRouteEditBanner is-hidden" aria-hidden="true" role="status">
+              <div class="supplyChainRouteEditBanner__inner">
+                <span class="supplyChainRouteEditBanner__title">Currently Editing:</span>
+                <div class="supplyChainRouteEditBanner__diagram">
+                  <span class="supplyChainRouteEditBanner__node" data-sc-route-banner-from>A</span>
+                  <span class="supplyChainRouteEditBanner__leg">
+                    <span class="supplyChainRouteEditBanner__mode" data-sc-route-banner-mode>—</span>
+                    <span class="supplyChainRouteEditBanner__arrowLine" aria-hidden="true"></span>
+                  </span>
+                  <span class="supplyChainRouteEditBanner__node" data-sc-route-banner-to>B</span>
+                </div>
               </div>
             </div>
-          </div>
+            <div id="participantSupplyChainRouteCursorHint" class="supplyChainRouteCursorHint is-hidden" aria-hidden="true">
+              Please Mark the Route
+            </div>
 
-          <div
-            id="roleGate"
-            class="roleGate roleGate--floating"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="roleGateTitle"
-          >
-            <div class="participantGate__card roleGate__card">
-              <h2 class="roleGate__title" id="roleGateTitle">What is your role/job in the industry company?</h2>
-              <p class="participantGate__p roleGate__intro">Choose the option that best describes your role.</p>
-              <fieldset class="roleGate__fieldset">
-                <legend class="roleGate__legend">Your role</legend>
-                <label class="roleGate__option">
-                  <input type="radio" name="participantRole" value="manager" />
-                  Manager
-                </label>
-                <label class="roleGate__option">
-                  <input type="radio" name="participantRole" value="worker" />
-                  Worker
-                </label>
-                <label class="roleGate__option">
-                  <input type="radio" name="participantRole" value="transporter" />
-                  Transporter
-                </label>
-                <label class="roleGate__option">
-                  <input type="radio" name="participantRole" value="other" />
-                  Others
-                </label>
-              </fieldset>
-              <div id="roleOtherWrap" class="roleOtherWrap is-hidden">
-                <label class="roleGate__label" for="roleOtherInput">Please specify</label>
-                <input
-                  id="roleOtherInput"
-                  class="roleGate__input"
-                  type="text"
-                  maxlength="200"
-                  autocomplete="off"
-                  placeholder="Describe your role"
-                />
-              </div>
-              <div class="participantGate__actions">
-                <button class="primaryBtn" id="roleContinueBtn" type="button">Continue</button>
+            <!-- ── Floating question gates ───────────────────── -->
+            <div id="industryGate" class="industryGate industryGate--floating" role="dialog" aria-modal="true" aria-labelledby="industryGateTitle">
+              <div class="participantGate__card industryGate__card">
+                <h2 class="industryGate__title" id="industryGateTitle">What industry company do you work in?</h2>
+                <p class="participantGate__p industryGate__intro">
+                  Please type the name of industry company you work in.<br />
+                  Next, please mark the company's location on the map.
+                </p>
+                <label class="industryGate__label" for="industryCompanyInput">Your answer</label>
+                <input id="industryCompanyInput" class="industryGate__input" type="text" maxlength="500" autocomplete="organization" placeholder="e.g. ABC Logistics, food manufacturing, etc." />
+                <div class="participantGate__actions">
+                  <button class="primaryBtn" id="industryContinueBtn" type="button">Continue to map</button>
+                </div>
               </div>
             </div>
-          </div>
 
-          <div
-            id="goodsGate"
-            class="goodsGate goodsGate--floating"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="goodsGateTitle"
-          >
-            <div class="participantGate__card goodsGate__card">
-              <h2 class="goodsGate__title" id="goodsGateTitle">
-                What kind of goods or products do you produce or distribute?
-              </h2>
-              <p class="participantGate__p goodsGate__intro">Select all that apply.</p>
-              <fieldset class="goodsGate__fieldset">
-                <legend class="goodsGate__legend">Goods or products</legend>
-                <label class="goodsGate__option">
-                  <input type="checkbox" name="participantGoods" value="recyclables" />
-                  <img src="Icons/Products/Recyclables.svg" class="goodsGate__icon" alt="" aria-hidden="true" />
-                  Recyclables
-                </label>
-                <label class="goodsGate__option">
-                  <input type="checkbox" name="participantGoods" value="food" />
-                  <img src="Icons/Products/Food.svg" class="goodsGate__icon" alt="" aria-hidden="true" />
-                  Food
-                </label>
-                <label class="goodsGate__option">
-                  <input type="checkbox" name="participantGoods" value="construction" />
-                  <img src="Icons/Products/COnstruction_materials.svg" class="goodsGate__icon" alt="" aria-hidden="true" />
-                  Construction Materials
-                </label>
-                <label class="goodsGate__option">
-                  <input type="checkbox" name="participantGoods" value="automotive" />
-                  <img src="Icons/Products/Auto_parts.svg" class="goodsGate__icon" alt="" aria-hidden="true" />
-                  Automotive Parts
-                </label>
-                <label class="goodsGate__option">
-                  <input type="checkbox" name="participantGoods" value="light_fabrication" />
-                  <img src="Icons/Products/Light_fabrication.svg" class="goodsGate__icon" alt="" aria-hidden="true" />
-                  Light Fabrication
-                </label>
-                <label class="goodsGate__option">
-                  <input type="checkbox" name="participantGoods" value="high_tech" />
-                  <img src="Icons/Products/Tech.svg" class="goodsGate__icon" alt="" aria-hidden="true" />
-                  High-tech Productions
-                </label>
-                <label class="goodsGate__option">
-                  <input type="checkbox" name="participantGoods" value="other" />
-                  Others
-                </label>
-              </fieldset>
-              <div id="goodsOtherWrap" class="goodsOtherWrap is-hidden">
-                <label class="goodsGate__label" for="goodsOtherInput">Please specify</label>
-                <input
-                  id="goodsOtherInput"
-                  class="goodsGate__input"
-                  type="text"
-                  maxlength="300"
-                  autocomplete="off"
-                  placeholder="Describe the goods or products"
-                />
-              </div>
-              <div class="participantGate__actions">
-                <button class="primaryBtn" id="goodsContinueBtn" type="button">Continue</button>
+            <div id="roleGate" class="roleGate roleGate--floating" role="dialog" aria-modal="true" aria-labelledby="roleGateTitle">
+              <div class="participantGate__card roleGate__card">
+                <h2 class="roleGate__title" id="roleGateTitle">What is your role/job in the industry company?</h2>
+                <p class="participantGate__p roleGate__intro">Choose the option that best describes your role.</p>
+                <fieldset class="roleGate__fieldset">
+                  <legend class="roleGate__legend">Your role</legend>
+                  <label class="roleGate__option"><input type="radio" name="participantRole" value="manager" /> Manager</label>
+                  <label class="roleGate__option"><input type="radio" name="participantRole" value="worker" /> Worker</label>
+                  <label class="roleGate__option"><input type="radio" name="participantRole" value="transporter" /> Transporter</label>
+                  <label class="roleGate__option"><input type="radio" name="participantRole" value="other" /> Others</label>
+                </fieldset>
+                <div id="roleOtherWrap" class="roleOtherWrap is-hidden">
+                  <label class="roleGate__label" for="roleOtherInput">Please specify</label>
+                  <input id="roleOtherInput" class="roleGate__input" type="text" maxlength="200" autocomplete="off" placeholder="Describe your role" />
+                </div>
+                <div class="participantGate__actions">
+                  <button class="primaryBtn" id="roleContinueBtn" type="button">Continue</button>
+                </div>
               </div>
             </div>
-          </div>
 
-          <div
-            id="rawMaterialsGate"
-            class="rawMaterialsGate rawMaterialsGate--floating"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="rawMaterialsGateTitle"
-          >
-            <div class="participantGate__card rawMaterialsGate__card">
-              <h2 class="rawMaterialsGate__title" id="rawMaterialsGateTitle">
-                What are your raw materials for the production?
-              </h2>
-              <p class="participantGate__p rawMaterialsGate__intro">
-                Enter each raw material in its own field. Add more fields if you need them.
-              </p>
-              <div id="rawMaterialsList" class="rawMaterialsList" role="list"></div>
-              <button type="button" class="ghostBtn rawMaterialsAddBtn" id="rawMaterialsAddBtn">
-                + Add another
+            <div id="goodsGate" class="goodsGate goodsGate--floating" role="dialog" aria-modal="true" aria-labelledby="goodsGateTitle">
+              <div class="participantGate__card goodsGate__card">
+                <h2 class="goodsGate__title" id="goodsGateTitle">What kind of goods or products do you produce or distribute?</h2>
+                <p class="participantGate__p goodsGate__intro">Select all that apply.</p>
+                <fieldset class="goodsGate__fieldset">
+                  <legend class="goodsGate__legend">Goods or products</legend>
+                  <label class="goodsGate__option"><input type="checkbox" name="participantGoods" value="recyclables" /><img src="Icons/Products/Recyclables.svg" class="goodsGate__icon" alt="" aria-hidden="true" /> Recyclables</label>
+                  <label class="goodsGate__option"><input type="checkbox" name="participantGoods" value="food" /><img src="Icons/Products/Food.svg" class="goodsGate__icon" alt="" aria-hidden="true" /> Food</label>
+                  <label class="goodsGate__option"><input type="checkbox" name="participantGoods" value="construction" /><img src="Icons/Products/COnstruction_materials.svg" class="goodsGate__icon" alt="" aria-hidden="true" /> Construction Materials</label>
+                  <label class="goodsGate__option"><input type="checkbox" name="participantGoods" value="automotive" /><img src="Icons/Products/Auto_parts.svg" class="goodsGate__icon" alt="" aria-hidden="true" /> Automotive Parts</label>
+                  <label class="goodsGate__option"><input type="checkbox" name="participantGoods" value="light_fabrication" /><img src="Icons/Products/Light_fabrication.svg" class="goodsGate__icon" alt="" aria-hidden="true" /> Light Fabrication</label>
+                  <label class="goodsGate__option"><input type="checkbox" name="participantGoods" value="high_tech" /><img src="Icons/Products/Tech.svg" class="goodsGate__icon" alt="" aria-hidden="true" /> High-tech Productions</label>
+                  <label class="goodsGate__option"><input type="checkbox" name="participantGoods" value="other" /> Others</label>
+                </fieldset>
+                <div id="goodsOtherWrap" class="goodsOtherWrap is-hidden">
+                  <label class="goodsGate__label" for="goodsOtherInput">Please specify</label>
+                  <input id="goodsOtherInput" class="goodsGate__input" type="text" maxlength="300" autocomplete="off" placeholder="Describe the goods or products" />
+                </div>
+                <div class="participantGate__actions">
+                  <button class="primaryBtn" id="goodsContinueBtn" type="button">Continue</button>
+                </div>
+              </div>
+            </div>
+
+            <div id="rawMaterialsGate" class="rawMaterialsGate rawMaterialsGate--floating" role="dialog" aria-modal="true" aria-labelledby="rawMaterialsGateTitle">
+              <div class="participantGate__card rawMaterialsGate__card">
+                <h2 class="rawMaterialsGate__title" id="rawMaterialsGateTitle">What are your raw materials for the production?</h2>
+                <p class="participantGate__p rawMaterialsGate__intro">Enter each raw material in its own field. Add more fields if you need them.</p>
+                <div id="rawMaterialsList" class="rawMaterialsList" role="list"></div>
+                <button type="button" class="ghostBtn rawMaterialsAddBtn" id="rawMaterialsAddBtn">+ Add another</button>
+                <div class="participantGate__actions">
+                  <button class="primaryBtn" id="rawMaterialsContinueBtn" type="button">Continue</button>
+                </div>
+              </div>
+            </div>
+
+            <div id="participantProductsGate" class="rawMaterialsGate rawMaterialsGate--floating" role="dialog" aria-modal="true" aria-labelledby="participantProductsGateTitle">
+              <div class="participantGate__card rawMaterialsGate__card">
+                <h2 class="rawMaterialsGate__title" id="participantProductsGateTitle">What are your products?</h2>
+                <p class="participantGate__p rawMaterialsGate__intro">Enter each product in its own field. Add more fields if you need them.</p>
+                <div id="productsList" class="rawMaterialsList" role="list"></div>
+                <button type="button" class="ghostBtn rawMaterialsAddBtn" id="productsAddBtn">+ Add another</button>
+                <div class="participantGate__actions">
+                  <button class="primaryBtn" id="productsContinueBtn" type="button">Continue</button>
+                </div>
+              </div>
+            </div>
+
+            <div id="rawMaterialSupplyChainIntroGate" class="rawMaterialSupplyChainIntroGate rawMaterialSupplyChainIntroGate--floating" role="dialog" aria-modal="true" aria-labelledby="rawMaterialSupplyChainIntroTitle">
+              <div class="participantGate__card rawMaterialSupplyChainIntroGate__card">
+                <h2 class="rawMaterialSupplyChainIntroGate__title" id="rawMaterialSupplyChainIntroTitle"></h2>
+                <div class="participantGate__actions">
+                  <button class="primaryBtn" id="rawMaterialSupplyChainIntroContinueBtn" type="button">Continue</button>
+                </div>
+              </div>
+            </div>
+
+            <div id="rawMaterialSupplyChainDiagramGate" class="rawMaterialSupplyChainDiagramGate rawMaterialSupplyChainDiagramGate--floating" role="dialog" aria-modal="true" aria-labelledby="rawMaterialSupplyChainDiagramTitle">
+              <div class="participantGate__card supplyChainDiagramGate__card">
+                <h2 class="supplyChainDiagramGate__title" id="rawMaterialSupplyChainDiagramTitle">Please Provide the Supply Chain Information</h2>
+                <p class="participantGate__p supplyChainDiagramGate__intro">
+                  <span id="supplyChainDiagramKindPrefix">Raw material</span>
+                  <span id="rawMaterialSupplyChainDiagramBadge" class="supplyChainDiagram__rmBadge"></span>
+                </p>
+                <div id="rawMaterialSupplyChainDiagramMount" class="supplyChainDiagramMount"></div>
+                <div class="participantGate__actions">
+                  <button type="button" class="primaryBtn" id="rawMaterialSupplyChainDiagramSaveBtn">Confirm &amp; Save</button>
+                </div>
+              </div>
+            </div>
+
+            <div id="rawMaterialTripFrequencyGate" class="rawMaterialTripFrequencyGate rawMaterialTripFrequencyGate--floating" role="dialog" aria-modal="true" aria-labelledby="rawMaterialTripFrequencyGateTitle">
+              <div class="participantGate__card rawMaterialTripFrequencyGate__card">
+                <h2 class="rawMaterialTripFrequencyGate__title" id="rawMaterialTripFrequencyGateTitle">What is the frequency of this trip?</h2>
+                <p class="participantGate__p rawMaterialTripFrequencyGate__intro">Enter how many full trips occur in each period.</p>
+                <div class="rawMaterialTripFrequencyGate__row">
+                  <label class="goodsGate__label" for="rawMaterialTripFrequencyCount">Trips</label>
+                  <div class="rawMaterialTripFrequencyGate__inputs">
+                    <input type="number" id="rawMaterialTripFrequencyCount" class="goodsGate__input rawMaterialTripFrequencyGate__count" min="1" step="1" placeholder="N" />
+                    <span class="rawMaterialTripFrequencyGate__mid" aria-hidden="true">trip(s) per</span>
+                    <select id="rawMaterialTripFrequencyPeriod" class="goodsGate__input rawMaterialTripFrequencyGate__period" aria-label="Day, week, or month">
+                      <option value="">—</option>
+                      <option value="day">Day</option>
+                      <option value="week">Week</option>
+                      <option value="month">Month</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="participantGate__actions">
+                  <button type="button" class="primaryBtn" id="rawMaterialTripFrequencyContinueBtn">Continue</button>
+                </div>
+              </div>
+            </div>
+
+            <div id="rawMaterialOriginGate" class="rawMaterialOriginGate rawMaterialOriginGate--floating" role="dialog" aria-modal="true" aria-labelledby="rawMaterialOriginGateTitle">
+              <div class="participantGate__card rawMaterialOriginGate__card">
+                <h2 class="rawMaterialOriginGate__title" id="rawMaterialOriginGateTitle">Where does it originate?</h2>
+                <p class="participantGate__p rawMaterialOriginGate__intro" id="rawMaterialOriginGateIntro">Choose the option that best applies.</p>
+                <fieldset class="goodsGate__fieldset">
+                  <legend class="goodsGate__legend">Origin</legend>
+                  <label class="goodsGate__option"><input type="radio" name="rawMaterialOriginChoice" value="storage_facility" /><img src="Icons/Locations/Storage.svg" class="goodsGate__icon" alt="" aria-hidden="true" /> Storage Facility</label>
+                  <label class="goodsGate__option"><input type="radio" name="rawMaterialOriginChoice" value="distribution_center" /><img src="Icons/Locations/Distribution.svg" class="goodsGate__icon" alt="" aria-hidden="true" /> Distribution center</label>
+                  <label class="goodsGate__option"><input type="radio" name="rawMaterialOriginChoice" value="manufacturing_facility" /><img src="Icons/Locations/Manufactoring.svg" class="goodsGate__icon" alt="" aria-hidden="true" /> Manufacturing Facility</label>
+                  <label class="goodsGate__option"><input type="radio" name="rawMaterialOriginChoice" value="airport" /><img src="Icons/Locations/Airport.svg" class="goodsGate__icon" alt="" aria-hidden="true" /> Airport</label>
+                  <label class="goodsGate__option"><input type="radio" name="rawMaterialOriginChoice" value="port" /><img src="Icons/Locations/Port.svg" class="goodsGate__icon" alt="" aria-hidden="true" /> Port</label>
+                  <label class="goodsGate__option"><input type="radio" name="rawMaterialOriginChoice" value="other" /> Others</label>
+                  <label class="goodsGate__option goodsGate__option--skip"><input type="radio" name="rawMaterialOriginChoice" value="skipped" /> I don't know and Skip the question.</label>
+                </fieldset>
+                <div id="rawMaterialOriginOtherWrap" class="goodsOtherWrap is-hidden">
+                  <label class="goodsGate__label" for="rawMaterialOriginOtherInput">Please specify</label>
+                  <input id="rawMaterialOriginOtherInput" class="goodsGate__input" type="text" maxlength="300" autocomplete="off" placeholder="Describe the origin" />
+                </div>
+                <div class="participantGate__actions">
+                  <button class="primaryBtn" id="rawMaterialOriginContinueBtn" type="button">Continue</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Map -->
+            <div id="map"></div>
+            <div id="rawMaterialOriginMapSkipWrap" class="rawMaterialOriginMapSkipWrap is-hidden" aria-hidden="true">
+              <button type="button" class="ghostBtn rawMaterialOriginMapSkipBtn" id="rawMaterialOriginMapSkipBtn">
+                I don't know and Skip the question.
               </button>
-              <div class="participantGate__actions">
-                <button class="primaryBtn" id="rawMaterialsContinueBtn" type="button">Continue</button>
-              </div>
             </div>
-          </div>
-
-          <div
-            id="participantProductsGate"
-            class="rawMaterialsGate rawMaterialsGate--floating"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="participantProductsGateTitle"
-          >
-            <div class="participantGate__card rawMaterialsGate__card">
-              <h2 class="rawMaterialsGate__title" id="participantProductsGateTitle">What are your products?</h2>
-              <p class="participantGate__p rawMaterialsGate__intro">
-                Enter each product in its own field. Add more fields if you need them.
-              </p>
-              <div id="productsList" class="rawMaterialsList" role="list"></div>
-              <button type="button" class="ghostBtn rawMaterialsAddBtn" id="productsAddBtn">+ Add another</button>
-              <div class="participantGate__actions">
-                <button class="primaryBtn" id="productsContinueBtn" type="button">Continue</button>
-              </div>
+            <div class="mapHint" id="mapHint">
+              Follow the questions. The map is used when a step asks you to mark a location or draw a route.
             </div>
-          </div>
 
-          <div
-            id="rawMaterialSupplyChainIntroGate"
-            class="rawMaterialSupplyChainIntroGate rawMaterialSupplyChainIntroGate--floating"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="rawMaterialSupplyChainIntroTitle"
-          >
-            <div class="participantGate__card rawMaterialSupplyChainIntroGate__card">
-              <h2 class="rawMaterialSupplyChainIntroGate__title" id="rawMaterialSupplyChainIntroTitle"></h2>
-              <div class="participantGate__actions">
-                <button class="primaryBtn" id="rawMaterialSupplyChainIntroContinueBtn" type="button">
-                  Continue
-                </button>
-              </div>
-            </div>
-          </div>
+          </section>
+        </main>
 
-          <div
-            id="rawMaterialSupplyChainDiagramGate"
-            class="rawMaterialSupplyChainDiagramGate rawMaterialSupplyChainDiagramGate--floating"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="rawMaterialSupplyChainDiagramTitle"
-          >
-            <div class="participantGate__card supplyChainDiagramGate__card">
-              <h2 class="supplyChainDiagramGate__title" id="rawMaterialSupplyChainDiagramTitle">
-                Please Provide the Supply Chain Information
-              </h2>
-              <p class="participantGate__p supplyChainDiagramGate__intro">
-                <span id="supplyChainDiagramKindPrefix">Raw material</span>
-                <span id="rawMaterialSupplyChainDiagramBadge" class="supplyChainDiagram__rmBadge"></span>
-              </p>
-              <div id="rawMaterialSupplyChainDiagramMount" class="supplyChainDiagramMount"></div>
-              <div class="participantGate__actions">
-                <button type="button" class="primaryBtn" id="rawMaterialSupplyChainDiagramSaveBtn">
-                  Confirm &amp; Save
-                </button>
-              </div>
-            </div>
+        <!-- Hidden topbar kept for JS activeStepPill reference -->
+        <header class="topbar" style="display:none">
+          <div class="topbar__title"></div>
+          <div class="topbar__meta">
+            <span class="pill" id="activeStepPill">Map</span>
           </div>
+        </header>
+      </div><!-- /.conductorMain -->
 
-          <div
-            id="rawMaterialTripFrequencyGate"
-            class="rawMaterialTripFrequencyGate rawMaterialTripFrequencyGate--floating"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="rawMaterialTripFrequencyGateTitle"
-          >
-            <div class="participantGate__card rawMaterialTripFrequencyGate__card">
-              <h2 class="rawMaterialTripFrequencyGate__title" id="rawMaterialTripFrequencyGateTitle">
-                What is the frequency of this trip?
-              </h2>
-              <p class="participantGate__p rawMaterialTripFrequencyGate__intro">
-                Enter how many full trips occur in each period.
-              </p>
-              <div class="rawMaterialTripFrequencyGate__row">
-                <label class="goodsGate__label" for="rawMaterialTripFrequencyCount">Trips</label>
-                <div class="rawMaterialTripFrequencyGate__inputs">
-                  <input
-                    type="number"
-                    id="rawMaterialTripFrequencyCount"
-                    class="goodsGate__input rawMaterialTripFrequencyGate__count"
-                    min="1"
-                    step="1"
-                    placeholder="N"
-                  />
-                  <span class="rawMaterialTripFrequencyGate__mid" aria-hidden="true">trip(s) per</span>
-                  <select id="rawMaterialTripFrequencyPeriod" class="goodsGate__input rawMaterialTripFrequencyGate__period" aria-label="Day, week, or month">
-                    <option value="">—</option>
-                    <option value="day">Day</option>
-                    <option value="week">Week</option>
-                    <option value="month">Month</option>
-                  </select>
-                </div>
-              </div>
-              <div class="participantGate__actions">
-                <button type="button" class="primaryBtn" id="rawMaterialTripFrequencyContinueBtn">Continue</button>
-              </div>
-            </div>
-          </div>
-
-          <div
-            id="rawMaterialOriginGate"
-            class="rawMaterialOriginGate rawMaterialOriginGate--floating"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="rawMaterialOriginGateTitle"
-          >
-            <div class="participantGate__card rawMaterialOriginGate__card">
-              <h2 class="rawMaterialOriginGate__title" id="rawMaterialOriginGateTitle">Where does it originate?</h2>
-              <p class="participantGate__p rawMaterialOriginGate__intro" id="rawMaterialOriginGateIntro">
-                Choose the option that best applies.
-              </p>
-              <fieldset class="goodsGate__fieldset">
-                <legend class="goodsGate__legend">Origin</legend>
-                <label class="goodsGate__option">
-                  <input type="radio" name="rawMaterialOriginChoice" value="storage_facility" />
-                  <img src="Icons/Locations/Storage.svg" class="goodsGate__icon" alt="" aria-hidden="true" />
-                  Storage Facility
-                </label>
-                <label class="goodsGate__option">
-                  <input type="radio" name="rawMaterialOriginChoice" value="distribution_center" />
-                  <img src="Icons/Locations/Distribution.svg" class="goodsGate__icon" alt="" aria-hidden="true" />
-                  Distribution center
-                </label>
-                <label class="goodsGate__option">
-                  <input type="radio" name="rawMaterialOriginChoice" value="manufacturing_facility" />
-                  <img src="Icons/Locations/Manufactoring.svg" class="goodsGate__icon" alt="" aria-hidden="true" />
-                  Manufacturing Facility
-                </label>
-                <label class="goodsGate__option">
-                  <input type="radio" name="rawMaterialOriginChoice" value="airport" />
-                  <img src="Icons/Locations/Airport.svg" class="goodsGate__icon" alt="" aria-hidden="true" />
-                  Airport
-                </label>
-                <label class="goodsGate__option">
-                  <input type="radio" name="rawMaterialOriginChoice" value="port" />
-                  <img src="Icons/Locations/Port.svg" class="goodsGate__icon" alt="" aria-hidden="true" />
-                  Port
-                </label>
-                <label class="goodsGate__option">
-                  <input type="radio" name="rawMaterialOriginChoice" value="other" />
-                  Others
-                </label>
-                <label class="goodsGate__option goodsGate__option--skip">
-                  <input type="radio" name="rawMaterialOriginChoice" value="skipped" />
-                  I don't know and Skip the question.
-                </label>
-              </fieldset>
-              <div id="rawMaterialOriginOtherWrap" class="goodsOtherWrap is-hidden">
-                <label class="goodsGate__label" for="rawMaterialOriginOtherInput">Please specify</label>
-                <input
-                  id="rawMaterialOriginOtherInput"
-                  class="goodsGate__input"
-                  type="text"
-                  maxlength="300"
-                  autocomplete="off"
-                  placeholder="Describe the origin"
-                />
-              </div>
-              <div class="participantGate__actions">
-                <button class="primaryBtn" id="rawMaterialOriginContinueBtn" type="button">Continue</button>
-              </div>
-            </div>
-          </div>
-
-          <div id="map"></div>
-          <div
-            id="rawMaterialOriginMapSkipWrap"
-            class="rawMaterialOriginMapSkipWrap is-hidden"
-            aria-hidden="true"
-          >
-            <button type="button" class="ghostBtn rawMaterialOriginMapSkipBtn" id="rawMaterialOriginMapSkipBtn">
-              I don't know and Skip the question.
-            </button>
-          </div>
-          <div class="mapHint" id="mapHint">
-            Follow the questions. The map is used when a step asks you to mark a location or draw a route.
-          </div>
-        </section>
-      </main>
-    </div>
+    </div><!-- /#app -->
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6.5.0/turf.min.js"></script>
