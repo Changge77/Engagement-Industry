@@ -5738,18 +5738,18 @@ function updateParticipantSummaryCard() {
 }
 
 function costGradientColor(t) {
-  // rgba(74,204,255) → rgba(255,89,252) → rgba(255,0,0)
+  // rgba(253,238,243) → rgba(255,168,168) → rgba(255,0,0)
   let r, g, b;
   if (t <= 0.5) {
     const s = t * 2;
-    r = Math.round(74  + (255 - 74)  * s);
-    g = Math.round(204 + (89  - 204) * s);
-    b = Math.round(255 + (252 - 255) * s);
+    r = Math.round(253 + (255 - 253) * s);
+    g = Math.round(238 + (168 - 238) * s);
+    b = Math.round(243 + (168 - 243) * s);
   } else {
     const s = (t - 0.5) * 2;
     r = 255;
-    g = Math.round(89  + (0   - 89)  * s);
-    b = Math.round(252 + (0   - 252) * s);
+    g = Math.round(168 + (0   - 168) * s);
+    b = Math.round(168 + (0   - 168) * s);
   }
   return `rgb(${r},${g},${b})`;
 }

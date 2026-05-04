@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="g" data-name="OBJECTS" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 180">
+  <defs>
+    <style>
+      .h {
+        fill: #fff;
+      }
+    </style>
+  </defs>
+  <g>
+    <circle cx="42.65" cy="89.93" r="7.53"/>
+    <circle cx="90.75" cy="89.93" r="7.53"/>
+    <circle cx="138.84" cy="89.93" r="7.53"/>
+  </g>
+  <rect x="28.06" y="48.64" width="125.36" height="82.59"/>
+  <g>
+    <circle class="h" cx="55.67" cy="89.93" r="5.49"/>
+    <circle class="h" cx="90.75" cy="89.93" r="5.49"/>
+    <circle class="h" cx="125.82" cy="89.93" r="5.49"/>
+  </g>
+</svg>
